@@ -10,12 +10,38 @@ Eric Ihli owns this. Start: say hi + 1 motivating line. Work style: concise dens
 
 ## Core Philosophy
 
+**Simple ≠ short/easy**: Simple = untangled (one strand); complex = braided (intertwined concerns); easy = familiar (but often complex). Simplify means decouple/untangle, not inline/shorten/remove.
+
 - **Start simple, always** - smallest testable version first
+- **Build up from small** - compose from tiny, tested pieces
+- **Functions 3-5 lines** - decompose if larger
+- **REPL-driven development** - design for interactive exploration
+- **Minimize state** - each piece loadable/testable in isolation
+- **Doctests** - inline examples that verify behavior
 - **Ask before assuming** - gather context/specificity before implementing
 - **Fail fast explicitly** - raise exceptions, not silent failures
 - **Fix root cause** - no band-aids
 
 ## Before Implementing
+
+**STOP. DO NOT WRITE CODE YET.**
+
+Misunderstanding requirements wastes hours. Before ANY implementation:
+
+1. **Restate the goal** - summarize what you think user wants in 1-2 sentences
+2. **Ask clarifying questions** - if ANY ambiguity exists, ask. Don't assume.
+3. **Confirm understanding** - get explicit "yes" before writing code
+4. **Describe approach** - outline your plan; let user catch misalignment early
+
+Only proceed when user confirms understanding is correct.
+
+**High-level planning is OK** - sketch out large projects, identify components, discuss architecture. But when implementing: **one specific, well-defined piece at a time**. Confirm each piece before coding it.
+
+Red flags that mean STOP and CLARIFY:
+- "I think you want..." (you're guessing)
+- Multiple reasonable interpretations exist
+- You'd need to make architectural decisions user didn't specify
+- The request touches unfamiliar parts of the codebase
 
 Check:
 - Have context? (existing code, patterns, constraints)

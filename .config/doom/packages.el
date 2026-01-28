@@ -74,3 +74,4 @@
            :files ("*.el")
            :build (:not compile)))
 (package! gptel)
+(package! pet)

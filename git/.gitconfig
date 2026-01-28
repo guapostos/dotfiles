@@ -13,7 +13,6 @@
 [delta]
 	navigate = true
 	line-numbers = true
-	side-by-side = true
 
 [pull]
 	rebase = true
@@ -63,3 +62,12 @@
 
 [maintenance]
 	auto = true
+[safe]
+	directory = /home/agent/0xd8db
+	directory = /home/agent/trade-3
+	directory = /home/agent/trade-4
+	directory = /home/agent/trade-5
+	directory = /home/agent/trade-backtest
+	directory = /home/agent/trade-copycat
+	directory = /home/agent/trade-mypoly
+	directory = /home/agent/trade-sports

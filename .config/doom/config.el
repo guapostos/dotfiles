@@ -215,16 +215,14 @@
 
 (setq lsp-enable-file-watchers nil)
 
-;; From https://arunmozhi.in/2023/09/12/dev-note-getting-pyenv-and-pyright-to-work-in-doom-emacs
-(require 'pyenv-mode)
-(defun projectile-pyenv-mode-set ()
-  "Set pyenv version matching project name."
-  (let ((project (projectile-project-name)))
-    (if (member project (pyenv-mode-versions))
-        (pyenv-mode-set project)
-      (pyenv-mode-unset))))
-
-(add-hook 'projectile-after-switch-project-hook 'projectile-pyenv-mode-set)
+(use-package! pet
+  :config
+  (add-hook 'python-mode-hook
+            (lambda ()
+              (setq-local python-shell-interpreter (pet-executable-find "python")
+                          python-shell-virtualenv-root (pet-virtualenv-root))
+              (pet-flycheck-setup)
+              (pet-eglot-setup))))
 (after! projectile
   (add-to-list 'projectile-globally-ignored-directories "target/")
   (add-to-list 'projectile-globally-ignored-directories ".exercism/"))

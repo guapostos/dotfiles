@@ -1,6 +1,7 @@
 {
   "permissions": {
     "allow": [
+      "Explore",
       "Skill(clear-title:*)",
       "Skill(finalize:*)",
       "Skill(long-session:*)",
@@ -69,10 +70,10 @@
       "Bash(ps:*)",
       "Bash(jobs:*)",
       "Bash(claude-set-title:*)",
+      "Search",
       "WebSearch"
     ]
   },
-  "model": "opus",
   "hooks": {
     "Stop": [
       {

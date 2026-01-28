@@ -154,7 +154,6 @@
        ;;purescript        ; javascript, but functional
        (python
          +lsp
-         +pyenv
          +pyright
          +poetry)                 ; beautiful is better than ugly
        ;;qt                ; the 'cutest' gui framework ever
