@@ -21,6 +21,9 @@ abbr gsw "git switch"
 abbr gswc "git switch -c"
 abbr grb "git rebase"
 abbr grbi "git rebase -i"
+abbr gf "git fetch"
+abbr gca "git commit --amend"
+abbr gcam "git commit -am"
 
 # === Cross-platform clipboard ===
 switch (uname)
@@ -36,7 +39,8 @@ end
 set -gx XDG_STATE_HOME $HOME/.local/state
 set -gx XDG_CONFIG_HOME $HOME/.config
 set -gx XDG_DATA_HOME $HOME/.local/share
-set -gx VIRTUALENV_DIR $XDG_STATE_HOME
+set -gx XDG_CACHE_HOME $HOME/.cache
+set -gx VIRTUALENV_DIR $XDG_STATE_HOME/virtualenvs
 set -gx EDITOR vim
 
 # === Terminal colors ===
@@ -88,8 +92,13 @@ if type -q bat
 end
 
 # === SSH agent ===
-if status is-interactive
-    if not set -q SSH_AUTH_SOCK; and test -z "$SSH_CONNECTION"
+# Prefer existing socket (systemd, gnome-keyring) before spawning new agent
+if status is-interactive; and not set -q SSH_AUTH_SOCK
+    if test -S "$XDG_RUNTIME_DIR/ssh-agent.socket"
+        set -gx SSH_AUTH_SOCK "$XDG_RUNTIME_DIR/ssh-agent.socket"
+    else if test -S "$XDG_RUNTIME_DIR/gcr/ssh"
+        set -gx SSH_AUTH_SOCK "$XDG_RUNTIME_DIR/gcr/ssh"
+    else if test -z "$SSH_CONNECTION"
         eval (ssh-agent -c) >/dev/null
     end
 end
@@ -116,11 +125,14 @@ function ghhcl --description "Clone from GitHub via HTTPS"
     git clone https://github.com/$repo.git $dir
 end
 
-# Python virtualenv helpers
+# Python virtualenv helpers (uses $VIRTUALENV_DIR)
 function penvn --description "Create new virtualenv"
-    python3 -m venv ~/.virtualenvs/$argv[1]
+    test (count $argv) -eq 0; and echo "Usage: penvn <name>"; and return 1
+    mkdir -p "$VIRTUALENV_DIR"
+    python3 -m venv "$VIRTUALENV_DIR/$argv[1]"
 end
 
 function penva --description "Activate virtualenv"
-    source ~/.virtualenvs/$argv[1]/bin/activate.fish
+    test (count $argv) -eq 0; and echo "Usage: penva <name>"; and return 1
+    source "$VIRTUALENV_DIR/$argv[1]/bin/activate.fish"
 end

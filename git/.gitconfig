@@ -17,6 +17,15 @@
 [pull]
 	rebase = true
 
+[rebase]
+	autoStash = true
+
+[interactive]
+	diffFilter = delta --color-only
+
+[help]
+	autocorrect = prompt
+
 [push]
 	default = current
 	autoSetupRemote = true
@@ -44,6 +53,9 @@
 	undo = reset --soft HEAD~1
 	# Show what I did today
 	today = log --since=midnight --author='Eric Ihli' --oneline
+	ss = status
+	fixup = commit --fixup
+	ri = rebase -i
 
 [filter "lfs"]
 	required = true
@@ -62,12 +74,6 @@
 
 [maintenance]
 	auto = true
-[safe]
-	directory = /home/agent/0xd8db
-	directory = /home/agent/trade-3
-	directory = /home/agent/trade-4
-	directory = /home/agent/trade-5
-	directory = /home/agent/trade-backtest
-	directory = /home/agent/trade-copycat
-	directory = /home/agent/trade-mypoly
-	directory = /home/agent/trade-sports
+
+[include]
+	path = ~/.gitconfig.local
