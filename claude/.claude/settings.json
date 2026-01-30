@@ -1,6 +1,8 @@
 {
   "permissions": {
     "allow": [
+      "Read(~/.local/state/claude/checkpoints/**)",
+      "Edit(~/.local/state/claude/checkpoints/**)",
       "Explore",
       "Skill(clear-title:*)",
       "Skill(finalize:*)",
@@ -10,6 +12,8 @@
       "Skill(signoff:*)",
       "Skill(skill-creator:*)",
       "Skill(title:*)",
+      "Skill(checkpoint:*)",
+      "Skill(research:*)",
       "Skill(multi-mind:*)",
       "Skill(commit:*)",
       "Skill(code-review:*)",
