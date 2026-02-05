@@ -9,5 +9,8 @@ __pycache__/
 # Local overrides for claude settings (not tracked)
 settings.local.json
 
+# Claude Code plugin cache (auto-generated)
+claude/.claude/plugins/cache/
+
 # Fish auto-generated
 fish_variables
