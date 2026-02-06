@@ -21,7 +21,7 @@ if ! command -v stow &> /dev/null; then
 fi
 
 # Stow all packages
-for pkg in alacritty claude agents bash fish git starship tmux zellij; do
+for pkg in alacritty claude agents bash fish git nix starship tmux zellij; do
     echo "Stowing $pkg..."
     stow -t ~ "$pkg"
 done
