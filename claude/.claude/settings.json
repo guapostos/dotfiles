@@ -75,6 +75,7 @@
       "Bash(jobs:*)",
       "Bash(claude-set-title:*)",
       "Search",
+      "WebFetch",
       "WebSearch"
     ]
   },
