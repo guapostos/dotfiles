@@ -98,6 +98,7 @@ Comments should add value beyond what code says:
 - Use log levels appropriately
 - Use logs to debug
 - Maintain a `latest` symlink to most recent log file
+- **Multiprocessing**: stdout prints interleave/corrupt; use `QueueHandler` or file-per-worker
 
 ### XDG Directories
 
@@ -134,6 +135,12 @@ Never pollute $HOME with dotfiles/dotdirs.
 - Before handoff: run full gate (lint, types, tests, docs)
 - Use `/review` skill for critical review before complete
 - **Handoff summary**: findings, choices made, results (what changed and why)
+
+## Multi-Agent / Multi-Step Work
+
+- **Max 3-4 specialized agents** - more decreases quality
+- **Isolate heavy output**: tests, logs, exploratory work in subagents; keep main thread clean
+- **Before multi-step work**: write `working-spec.md` (goal, constraints, acceptance criteria). Reference across steps. Delete when complete.
 
 ## Long-Running Sessions
 
