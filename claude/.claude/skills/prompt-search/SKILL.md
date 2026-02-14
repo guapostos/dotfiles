@@ -9,6 +9,17 @@ Claude Code stores conversations in three locations:
 2. `~/.claude/history.jsonl` - Index of user prompts (display text only)
 3. `~/.claude/projects/<path>/<session>.jsonl` - Full conversation files
 
+## Schema (DO NOT guess columns — use only these)
+
+```
+base_messages(uuid PK, parent_uuid, session_id, timestamp, message_type, cwd, user_type, version, isSidechain, original_cwd)
+user_messages(uuid PK/FK→base_messages, message, tool_use_result, timestamp, is_at_mention_read, is_meta)
+assistant_messages(uuid PK/FK→base_messages, cost_usd, duration_ms, message, is_api_error_message, timestamp, model)
+conversation_summaries(leaf_uuid PK/FK→base_messages, summary, updated_at)
+```
+
+NOTE: `conversation_summaries` has NO `session_id`. To find summaries for a session, join: `conversation_summaries cs JOIN base_messages b ON cs.leaf_uuid = b.uuid WHERE b.session_id = ...`
+
 ## Quick Search: User Prompts (history.jsonl)
 
 Cleanest source for what the user actually typed. Includes sessionId for resume:
