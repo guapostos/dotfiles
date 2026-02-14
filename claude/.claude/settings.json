@@ -73,6 +73,8 @@
       "Bash(tsc:*)",
       "Bash(ps:*)",
       "Bash(jobs:*)",
+      "Bash(sqlite3:*)",
+      "Bash(python3:*)",
       "Bash(claude-set-title:*)",
       "Search",
       "WebFetch",
@@ -105,5 +107,6 @@
   "enabledPlugins": {
     "code-review@claude-plugins-official": true,
     "ralph-loop@claude-plugins-official": true
-  }
+  },
+  "skipDangerousModePermissionPrompt": true
 }
