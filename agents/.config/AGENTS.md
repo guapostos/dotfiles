@@ -85,10 +85,12 @@ Comments should add value beyond what code says:
 
 ### Logging
 
+- Follow `~/.claude/conventions/logging.md` for directory layout and format
+- JSON lines format, `runs/{timestamp}_{sha}[_dirty]/` dirs, `latest` symlink
 - Output useful to AI agents: clean, structured, min tokens, max info
 - Use log levels appropriately
 - Use logs to debug
-- Maintain a `latest` symlink to most recent log file
+- **Multiprocessing**: stdout prints interleave/corrupt; use `QueueHandler` or file-per-worker
 
 ### XDG Directories
 

@@ -17,6 +17,8 @@
       "Skill(multi-mind:*)",
       "Skill(commit:*)",
       "Skill(code-review:*)",
+      "Skill(log-analyze:*)",
+      "Skill(dashboard:*)",
       "Bash(git:*)",
       "Bash(gh:*)",
       "Bash(ruff:*)",
