@@ -10,7 +10,7 @@ $rust\
 $character"""
 
 # Faster - don't scan for languages not in use
-scan_timeout = 10
+scan_timeout = 50
 
 [directory]
 truncation_length = 3
