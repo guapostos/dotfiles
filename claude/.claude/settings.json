@@ -1,6 +1,7 @@
 {
   "permissions": {
     "allow": [
+      "Read(~/.config/AGENTS.md)",
       "Read(~/.local/state/claude/checkpoints/**)",
       "Edit(~/.local/state/claude/checkpoints/**)",
       "Explore",
