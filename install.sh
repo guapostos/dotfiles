@@ -83,6 +83,19 @@ for pkg in alacritty claude agents bash fish git nix starship tmux zellij; do
     stow -t ~ "$pkg"
 done
 
+# Stow private overlay (domain-specific skills/agents, not in public repo)
+# Uses symlink: claude-private -> ../dotfiles-private/claude-private
+# Stow from same dir enables tree folding (merges into shared ~/.claude/)
+if [ -L claude-private ] && [ -d claude-private ]; then
+    echo "Stowing private overlay..."
+    stow -t ~ claude-private
+else
+    echo "No private overlay found (optional). To add:"
+    echo "  git clone <private-repo> ~/src/dotfiles-private"
+    echo "  ln -sfn ../dotfiles-private/claude-private ~/src/dotfiles/claude-private"
+    echo "  stow -t ~ claude-private"
+fi
+
 # Symlink AGENTS.md to CLAUDE.md for Claude Code
 if [ -f ~/.config/AGENTS.md ] && [ ! -e ~/.claude/CLAUDE.md ]; then
     mkdir -p ~/.claude

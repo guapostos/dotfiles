@@ -12,5 +12,8 @@ settings.local.json
 # Claude Code plugin cache (auto-generated)
 claude/.claude/plugins/cache/
 
+# Private overlay symlink (points to ../dotfiles-private/claude-private)
+claude-private
+
 # Fish auto-generated
 fish_variables

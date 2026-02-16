@@ -13,7 +13,12 @@ cd ~/src/dotfiles
 ./install.sh
 
 # Or manually stow individual packages
-stow -t ~ alacritty fish tmux zellij starship git bash claude agents
+stow -t ~ alacritty fish tmux zellij starship git bash nix claude agents
+
+# Optional: private overlay (domain-specific skills/agents)
+# Clone your private dotfiles repo alongside this one:
+#   git clone <private-repo> ~/src/dotfiles-private
+# Then re-run install.sh — it auto-detects and stows the overlay.
 #+end_src
 
 ** Required Tools
