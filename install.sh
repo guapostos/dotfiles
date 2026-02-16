@@ -5,19 +5,76 @@
 set -e
 cd "$(dirname "$0")"
 
-# Install stow if missing
-if ! command -v stow &> /dev/null; then
-    echo "Installing stow..."
-    if command -v apt &> /dev/null; then
-        sudo apt install -y stow
-    elif command -v port &> /dev/null; then
-        sudo port install stow
-    elif command -v brew &> /dev/null; then
-        brew install stow
-    else
-        echo "Please install stow manually"
-        exit 1
+# Detect package manager
+if command -v port &> /dev/null; then
+    PM=port
+    PM_INSTALL="sudo port install"
+elif command -v apt &> /dev/null; then
+    PM=apt
+    PM_INSTALL="sudo apt install -y"
+elif command -v brew &> /dev/null; then
+    PM=brew
+    PM_INSTALL="brew install"
+else
+    echo "No supported package manager found (port, apt, brew)"
+    exit 1
+fi
+
+# Tools required by dotfiles configs
+# Format: "command:apt_pkg:port_pkg:brew_pkg"
+# Use - to skip a package manager (tool not available there)
+DEPS=(
+    "stow:stow:stow:stow"
+    "fish:fish:fish:fish"
+    "starship:starship:starship:starship"
+    "delta:git-delta:git-delta:git-delta"
+    "mise:mise:mise:mise"
+    "fzf:fzf:fzf:fzf"
+    "fd:fd-find:fd:fd"
+    "zoxide:zoxide:zoxide:zoxide"
+    "bat:bat:bat:bat"
+    "tmux:tmux:tmux:tmux"
+    "git-lfs:git-lfs:git-lfs:git-lfs"
+)
+
+# Check which tools are missing
+missing=()
+missing_pkgs=()
+for dep in "${DEPS[@]}"; do
+    IFS=: read -r cmd apt_pkg port_pkg brew_pkg <<< "$dep"
+    if ! command -v "$cmd" &> /dev/null; then
+        case $PM in
+            apt)  pkg=$apt_pkg ;;
+            port) pkg=$port_pkg ;;
+            brew) pkg=$brew_pkg ;;
+        esac
+        if [ "$pkg" != "-" ]; then
+            missing+=("$cmd")
+            missing_pkgs+=("$pkg")
+        fi
     fi
+done
+
+# Install missing tools with confirmation
+if [ ${#missing[@]} -gt 0 ]; then
+    echo "=== Missing tools ==="
+    echo ""
+    echo "The following tools are required by dotfiles configs but not installed:"
+    for i in "${!missing[@]}"; do
+        echo "  ${missing[$i]} (${missing_pkgs[$i]})"
+    done
+    echo ""
+    echo "Will run: $PM_INSTALL ${missing_pkgs[*]}"
+    echo ""
+    read -p "Install? [Y/n]: " -n 1 -r
+    echo ""
+    if [[ ! $REPLY =~ ^[Nn]$ ]]; then
+        $PM_INSTALL "${missing_pkgs[@]}"
+    else
+        echo "Skipping dependency install. Some configs may not work correctly."
+    fi
+else
+    echo "All tool dependencies satisfied."
 fi
 
 # Stow all packages
