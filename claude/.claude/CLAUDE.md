@@ -175,6 +175,8 @@ For multi-session/overnight autonomous work:
 
 ## Process Management
 
+- **Python buffering**: `python3 -c "..."` buffers stdout when not connected to a TTY (common in subprocesses/tools). Use `python3 -u -c "..."` for unbuffered output. Don't rewrite as a script file just to fix empty output.
+
 Use shell job control:
 ```bash
 npm start &          # background
