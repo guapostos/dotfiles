@@ -188,3 +188,7 @@
        :config
        ;;literate
        (default +bindings +smartparens))
+
+(when (eq system-type 'darwin)
+  (setenv "DISPLAY" ":99")
+  (setenv "DYLD_FALLBACK_LIBRARY_PATH" "/opt/local/lib"))
