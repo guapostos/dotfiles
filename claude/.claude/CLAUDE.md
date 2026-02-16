@@ -121,6 +121,7 @@ Never pollute $HOME with dotfiles/dotdirs.
 
 - Web search early
 - Read external docs early
+- **New projects**: use `/north-star` to create NORTH_STAR.md — immutable design contract for LLM agents (locked constraints, killed approaches with evidence, layer gates, decision log). Optionally add ROADMAP.md (vision) + PROMPT.md (current phase)
 
 ## Documentation
 

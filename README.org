@@ -94,6 +94,7 @@ Custom skills for Claude Code CLI (~/.claude/skills/~):
 | /signoff       | "end of day"         | Save session notes for tomorrow              |
 | /title         | "set title"          | Set terminal title (2-word summary)          |
 | /clear-title   | "reset title"        | Clear manual title, use auto-summary         |
+| /north-star    | "new project"        | Create immutable design contract (NORTH_STAR.md) |
 | /skill-creator | -                    | Guide for creating new skills                |
 | /mcp-builder   | -                    | Guide for building MCP servers               |
 
