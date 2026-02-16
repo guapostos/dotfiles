@@ -114,6 +114,7 @@ Never pollute $HOME with dotfiles/dotdirs.
 - Keep notes short; update when behavior/API changes
 - Add `read_when` hints on cross-cutting docs
 - Follow links until domain makes sense
+- **Per-project memory**: read `.ai-memory.md` in project root on startup (gitignored, not shared with collaborators). Append stable patterns confirmed across multiple interactions — not session-specific notes. Prune entries that no longer apply. Keep concise (<100 lines). Create if missing on first worthy insight.
 - **Proactively fix stale docs** after significant work
 - **README.md maintenance**: update verification commands, document new modules
 - **Diagrams**: use graphviz, not ascii art

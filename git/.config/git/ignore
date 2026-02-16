@@ -1,0 +1,5 @@
+# Claude Code local settings (not shared)
+**/.claude/settings.local.json
+
+# AI agent per-project memory (not shared)
+.ai-memory.md

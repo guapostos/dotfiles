@@ -9,6 +9,7 @@
 	editor = vim
 	pager = delta
 	autocrlf = input
+	excludesFile = ~/.config/git/ignore
 
 [delta]
 	navigate = true
