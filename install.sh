@@ -35,6 +35,7 @@ DEPS=(
     "bat:bat:bat:bat"
     "tmux:tmux:tmux:tmux"
     "git-lfs:git-lfs:git-lfs:git-lfs"
+    "terminal-notifier:-:terminal-notifier:terminal-notifier"
 )
 
 # Check which tools are missing
