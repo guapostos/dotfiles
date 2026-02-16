@@ -2,13 +2,6 @@
 
 Search across Claude Code conversation history: $ARGUMENTS
 
-## Data Sources
-
-Claude Code stores conversations in three locations:
-1. `~/.claude/__store.db` - SQLite with messages, sessions, summaries
-2. `~/.claude/history.jsonl` - Index of user prompts (display text only)
-3. `~/.claude/projects/<path>/<session>.jsonl` - Full conversation files
-
 ## Schema (DO NOT guess columns — use only these)
 
 ```
@@ -18,11 +11,9 @@ assistant_messages(uuid PK/FK→base_messages, cost_usd, duration_ms, message, i
 conversation_summaries(leaf_uuid PK/FK→base_messages, summary, updated_at)
 ```
 
-NOTE: `conversation_summaries` has NO `session_id`. To find summaries for a session, join: `conversation_summaries cs JOIN base_messages b ON cs.leaf_uuid = b.uuid WHERE b.session_id = ...`
+NOTE: `conversation_summaries` has NO `session_id`. Join via `base_messages`.
 
 ## Quick Search: User Prompts (history.jsonl)
-
-Cleanest source for what the user actually typed. Includes sessionId for resume:
 
 ```bash
 python3 -c "
@@ -40,9 +31,7 @@ for d in matches[-20:]:
 "
 ```
 
-## Database Search: Messages with Session IDs
-
-Search SQLite for messages (includes tool results, filter as needed):
+## Database Search: Messages
 
 ```bash
 sqlite3 ~/.claude/__store.db "
@@ -64,25 +53,7 @@ LIMIT 15;
 "
 ```
 
-## Database Search: Conversation Summaries
-
-AI-generated summaries of conversations:
-
-```bash
-sqlite3 ~/.claude/__store.db "
-SELECT
-    cs.summary,
-    datetime(cs.updated_at, 'unixepoch', 'localtime') as date
-FROM conversation_summaries cs
-WHERE cs.summary LIKE '%$ARGUMENTS%'
-ORDER BY cs.updated_at DESC
-LIMIT 10;
-"
-```
-
-## Database Search: Recent Sessions
-
-List recent sessions with message counts:
+## Recent Sessions
 
 ```bash
 sqlite3 ~/.claude/__store.db "
@@ -99,64 +70,10 @@ LIMIT 10;
 "
 ```
 
-## Project Conversation Files
-
-Search full conversation content in project files:
-
-```bash
-# Find project directories
-ls ~/.claude/projects/
-
-# Search within a specific project's conversations
-grep -l "$ARGUMENTS" ~/.claude/projects/-home-*/*.jsonl 2>/dev/null | head -10
-
-# Extract session ID from filename for resuming
-# File: ~/.claude/projects/-home-foo/abc123-def4-....jsonl
-# Session ID: abc123-def4-....
-```
-
 ## Resume a Session
 
-After finding a relevant session_id:
-
 ```bash
-# Resume interactively with search
-claude --resume
-
-# Resume specific session
-claude --resume SESSION_ID
-
-# Fork instead of continuing (new session from that point)
-claude --resume SESSION_ID --fork-session
+claude --resume            # interactive search
+claude --resume SESSION_ID # specific session
+claude --resume SESSION_ID --fork-session  # fork instead of continue
 ```
-
-## Full Search Pipeline
-
-Run comprehensive search across all sources:
-
-```bash
-echo "=== HISTORY.JSONL (user prompts) ===" && \
-python3 -c "
-import json,os
-from datetime import datetime
-term = '$ARGUMENTS'.lower()
-with open(os.path.expanduser('~/.claude/history.jsonl')) as f:
-    matches = [json.loads(l) for l in f if term in l.lower()]
-for d in matches[-10:]:
-    ts = datetime.fromtimestamp(d.get('timestamp',0)/1000)
-    print(f'{ts:%Y-%m-%d} | {d.get(\"sessionId\",\"\")[:8]} | {d.get(\"project\",\"\").split(\"/\")[-1]:20} | {d.get(\"display\",\"\")[:60]}')
-"
-
-echo "" && echo "=== CONVERSATION SUMMARIES ===" && \
-sqlite3 ~/.claude/__store.db "SELECT datetime(updated_at,'unixepoch','localtime'), substr(summary,1,80) FROM conversation_summaries WHERE summary LIKE '%$ARGUMENTS%' ORDER BY updated_at DESC LIMIT 5;" 2>/dev/null
-
-echo "" && echo "=== PROJECT FILES ===" && \
-grep -l "$ARGUMENTS" ~/.claude/projects/*/*.jsonl 2>/dev/null | head -5
-```
-
-## Output
-
-After running searches, report:
-1. Matching user prompts with dates and projects
-2. Related conversation summaries
-3. Session IDs that can be resumed with `claude --resume SESSION_ID`

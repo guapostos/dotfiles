@@ -1,0 +1,20 @@
+// Multi-agent layout: 2x2 grid for parallel Claude Code sessions
+// Usage: zellij --layout multi-agent
+
+layout {
+    tab name="agents" {
+        pane split_direction="horizontal" {
+            pane split_direction="vertical" {
+                pane name="agent-1" command="fish"
+                pane name="agent-2" command="fish"
+            }
+            pane split_direction="vertical" {
+                pane name="agent-3" command="fish"
+                pane name="agent-4" command="fish"
+            }
+        }
+    }
+    tab name="monitor" {
+        pane name="monitor" command="fish"
+    }
+}

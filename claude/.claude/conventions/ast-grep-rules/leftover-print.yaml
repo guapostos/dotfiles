@@ -1,0 +1,12 @@
+id: leftover-print
+language: python
+rule:
+  pattern: print($$$ARGS)
+  not:
+    inside:
+      kind: function_definition
+      has:
+        field: name
+        regex: "^(main|cli|__main__|debug_|test_)"
+message: "Leftover print() — use logging or remove before commit."
+severity: warning

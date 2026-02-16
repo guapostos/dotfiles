@@ -24,30 +24,19 @@ Eric Ihli owns this. Start: say hi + 1 motivating line. Work style: concise dens
 
 ## Before Implementing
 
-**STOP. DO NOT WRITE CODE YET.**
+**STOP. DO NOT WRITE CODE YET.** Misunderstanding requirements wastes hours.
 
-Misunderstanding requirements wastes hours. Before ANY implementation:
+- [ ] Restate the goal in 1-2 sentences
+- [ ] Clarify ambiguity — ask, don't assume
+- [ ] Confirm understanding — get explicit "yes"
+- [ ] Describe approach — let user catch misalignment early
+- [ ] Have context? (existing code, patterns, constraints)
+- [ ] Can start with simple testable version?
+- [ ] Response >50 lines or >3 files? Simplify or break down.
 
-1. **Restate the goal** - summarize what you think user wants in 1-2 sentences
-2. **Ask clarifying questions** - if ANY ambiguity exists, ask. Don't assume.
-3. **Confirm understanding** - get explicit "yes" before writing code
-4. **Describe approach** - outline your plan; let user catch misalignment early
+**Blast radius**: 1-2 files → just do it; 3-5 → plan mode; 5+ → working-spec + parallel agents
 
-Only proceed when user confirms understanding is correct.
-
-**High-level planning is OK** - sketch out large projects, identify components, discuss architecture. But when implementing: **one specific, well-defined piece at a time**. Confirm each piece before coding it.
-
-Red flags that mean STOP and CLARIFY:
-- "I think you want..." (you're guessing)
-- Multiple reasonable interpretations exist
-- You'd need to make architectural decisions user didn't specify
-- The request touches unfamiliar parts of the codebase
-
-Check:
-- Have context? (existing code, patterns, constraints)
-- User specific enough? If vague, ask.
-- Can start with simple testable version?
-- Response >50 lines or >3 files? Simplify or break down.
+**STOP if**: you're guessing intent, multiple interpretations exist, architectural decisions weren't specified, or touching unfamiliar code. High-level planning is fine — but implement one specific piece at a time.
 
 ## Coding
 
@@ -58,6 +47,8 @@ Check:
 - No shortcuts to pass types/tests
 - Use appropriate lint tools
 - Keep files small (optimize for tokens)
+- Comment tricky sections to preserve intent across sessions; "why not X" prevents re-trying killed approaches
+- Reference sibling projects explicitly for pattern reuse
 
 ### Docstrings
 
@@ -115,6 +106,7 @@ Never pollute $HOME with dotfiles/dotdirs.
 
 - Web search early
 - Read external docs early
+- **New projects**: copy pre-commit config + `ast-grep/rules/` from `~/.claude/conventions/`
 - **New projects**: use `/north-star` to create NORTH_STAR.md — immutable design contract for LLM agents (locked constraints, killed approaches with evidence, layer gates, decision log). Optionally add ROADMAP.md (vision) + PROMPT.md (current phase)
 
 ## Documentation
@@ -130,6 +122,7 @@ Never pollute $HOME with dotfiles/dotdirs.
 
 - Before handoff: run full gate (lint, types, tests, docs)
 - Use `/review` skill for critical review before complete
+- **Refactoring budget**: ~20% agent time on cleanup — dead code, dedup, `ruff check --fix`
 - **Handoff summary**: findings, choices made, results (what changed and why)
 
 ## Long-Running Sessions
@@ -163,15 +156,8 @@ For multi-session/overnight autonomous work:
 
 ## Process Management
 
-- **Python buffering**: `python3 -c "..."` buffers stdout when not connected to a TTY (common in subprocesses/tools). Use `python3 -u -c "..."` for unbuffered output. Don't rewrite as a script file just to fix empty output.
-
-Use shell job control:
-```bash
-npm start &          # background
-jobs                 # list
-kill %1              # kill job 1
-jobs -p | xargs kill # cleanup all
-```
+- **Python buffering**: Use `python3 -u` for unbuffered stdout in subprocesses/tools
+- Use shell job control (`&`, `jobs`, `kill %N`) for background processes
 
 ## Red Flags - Stop and Reassess
 

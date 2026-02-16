@@ -13,6 +13,7 @@ Capture and restore working state to prevent context pollution.
 
 ### `/checkpoint save [name]`
 Save current state. Name optional (auto-generates if omitted).
+Suggest checkpointing when context is growing large or before risky changes.
 
 1. Generate or use provided name (kebab-case, 2-3 words)
 2. Ensure dir exists: `mkdir -p ~/.local/state/claude/checkpoints`
@@ -29,6 +30,8 @@ CWD: <pwd>
 ## Current State
 - <what's working/tested>
 - <files changed>
+- Diff stat: <output of `git diff --stat`>
+- Last green commit: <SHA where tests last passed>
 
 ## Key Decisions
 - <decisions and rationale>

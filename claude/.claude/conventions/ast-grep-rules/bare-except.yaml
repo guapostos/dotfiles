@@ -1,0 +1,8 @@
+id: bare-except
+language: python
+rule:
+  pattern: |
+    except:
+        $$$BODY
+message: "Bare `except:` catches KeyboardInterrupt/SystemExit. Use `except Exception:` instead."
+severity: warning
