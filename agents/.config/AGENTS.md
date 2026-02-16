@@ -105,6 +105,9 @@ Never pollute $HOME with dotfiles/dotdirs.
 ## Testing
 
 - Testing pyramid: mostly unit, some integration, few e2e
+- **Unit tests must be fast** - no big data, no network, no disk I/O
+- Integration/e2e: keep fast as possible; mark with `@pytest.mark.slow`; must be skippable (`pytest -m "not slow"`)
+- No big-data test fixtures - use minimal representative samples
 - E2e to verify; if blocked, say what's missing
 - **External APIs: integration test early** - verify real connectivity before extensive mocks
 
