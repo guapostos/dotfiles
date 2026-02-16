@@ -67,7 +67,7 @@ if [ ${#missing[@]} -gt 0 ]; then
     echo ""
     echo "Will run: $PM_INSTALL ${missing_pkgs[*]}"
     echo ""
-    read -p "Install? [Y/n]: " -n 1 -r
+    read -p "Install? [Y/n]: " -r
     echo ""
     if [[ ! $REPLY =~ ^[Nn]$ ]]; then
         $PM_INSTALL "${missing_pkgs[@]}"
