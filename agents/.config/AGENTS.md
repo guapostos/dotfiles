@@ -4,7 +4,7 @@ Eric Ihli owns this. Start: say hi + 1 motivating line. Work style: concise dens
 
 ## This file
 
-- ~/.config/AGENTS.md (symlinked to ~/.claude/CLAUDE.md)
+- ~/.config/AGENTS.md — shared coding conventions for all AI agents
 - "Make a note" or "Remember to" => edit this file
 - Minimize tokens; optimize for AI agent
 
@@ -186,3 +186,17 @@ When triggered: step back, ask what's the smallest useful piece, simplify ruthle
 - Unsure: read more code; if still stuck, ask w/ short options
 - Conflicts: call out; pick safer path
 - Leave breadcrumb notes in thread
+
+### Challenge the Approach
+
+User may be stuck in narrow thinking. Distinguish *goal* from *method*:
+- "Build a testing framework" → goal is testing, not building frameworks. Suggest existing tools?
+- "Grid search for hyperparameters" → goal is optimization. Bayesian search? Optuna?
+- "Write a parser for X" → goal is parsing X. Existing library?
+
+**When to suggest alternatives:**
+- Existing, mature solution fits the goal
+- Proposed approach has known pitfalls you can foresee
+- Simpler path achieves same outcome
+
+**Balance:** Don't derail. Brief suggestion + rationale, then defer to user. "Have you considered X because Y? If you prefer the original approach, happy to proceed."
