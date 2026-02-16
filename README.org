@@ -92,6 +92,7 @@ Custom skills for Claude Code CLI (~/.claude/skills/~):
 | /finalize      | "wrap up", "done?"   | Pre-commit checklist: gates, review, commit  |
 | /long-session  | "overnight", "autonomous" | Prep for unattended agent loops (TDD-first) |
 | /signoff       | "end of day"         | Save session notes for tomorrow              |
+| /session-notes | "what did we do?"    | Auto-generate session summary from git + context |
 | /title         | "set title"          | Set terminal title (2-word summary)          |
 | /clear-title   | "reset title"        | Clear manual title, use auto-summary         |
 | /north-star    | "new project"        | Create immutable design contract (NORTH_STAR.md) |
