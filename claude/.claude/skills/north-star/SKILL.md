@@ -107,6 +107,7 @@ Output: "NORTH_STAR.md written. Review the LOCKED constraints — once we start 
 
 ## Key Principles
 
+- **Destination, not path.** NORTH_STAR defines *what* and *why* — constraints, invariants, kill list. It does NOT contain implementation plans, phases, timelines, or specs. Those belong in ROADMAP.md / PROMPT.md.
 - **Primary audience is LLM agents**, not humans. Be explicit about what NOT to do.
 - **Evidence over opinion**. Every killed approach needs a citation (which codebase, what result).
 - **LOCKED means locked**. Changes require a decision log entry with rationale.
