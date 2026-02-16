@@ -23,6 +23,7 @@ fi
 # Tools required by dotfiles configs
 # Format: "command:apt_pkg:port_pkg:brew_pkg"
 # Use - to skip a package manager (tool not available there)
+# Use cmd1|cmd2 to check alternate binary names (e.g. Debian's fdfind/batcat)
 DEPS=(
     "stow:stow:stow:stow"
     "fish:fish:fish:fish"
@@ -30,9 +31,9 @@ DEPS=(
     "delta:git-delta:git-delta:git-delta"
     "mise:mise:mise:mise"
     "fzf:fzf:fzf:fzf"
-    "fd:fd-find:fd:fd"
+    "fd|fdfind:fd-find:fd:fd"
     "zoxide:zoxide:zoxide:zoxide"
-    "bat:bat:bat:bat"
+    "bat|batcat:bat:bat:bat"
     "tmux:tmux:tmux:tmux"
     "git-lfs:git-lfs:git-lfs:git-lfs"
     "terminal-notifier:-:terminal-notifier:terminal-notifier"
@@ -43,7 +44,12 @@ missing=()
 missing_pkgs=()
 for dep in "${DEPS[@]}"; do
     IFS=: read -r cmd apt_pkg port_pkg brew_pkg <<< "$dep"
-    if ! command -v "$cmd" &> /dev/null; then
+    # Check all alternate names (pipe-separated)
+    found=false
+    for alt in ${cmd//|/ }; do
+        if command -v "$alt" &> /dev/null; then found=true; break; fi
+    done
+    if ! $found; then
         case $PM in
             apt)  pkg=$apt_pkg ;;
             port) pkg=$port_pkg ;;
