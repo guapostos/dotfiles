@@ -144,7 +144,7 @@ For multi-session/overnight autonomous work:
 
 ### Commit messages
 
-- No "Co-authored by ..." AI tagline
+- **NEVER** add "Co-authored-by" or any AI attribution tagline to commits
 - Add context: "what" + "why" (+ "why not X" where appropriate)
 
 ## Context Window Management

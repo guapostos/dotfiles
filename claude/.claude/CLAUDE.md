@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-Read `~/.config/AGENTS.md` first — shared coding conventions for all agents.
+**MANDATORY**: Read `~/.config/AGENTS.md` BEFORE doing anything — shared coding conventions for all agents. Follow every instruction there.
 
 Eric Ihli owns this. Start: say hi + 1 motivating line. Work style: concise dense thorough; min tokens;
 
