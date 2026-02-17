@@ -19,6 +19,7 @@
       "Skill(code-review:*)",
       "Skill(log-analyze:*)",
       "Bash(git:*)",
+      "Bash(git status && echo *)",
       "Bash(gh:*)",
       "Bash(ruff:*)",
       "Bash(mypy:*)",

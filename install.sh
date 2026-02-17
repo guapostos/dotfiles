@@ -27,9 +27,9 @@ fi
 DEPS=(
     "stow:stow:stow:stow"
     "fish:fish:fish:fish"
-    "starship:starship:starship:starship"
-    "delta:git-delta:git-delta:git-delta"
-    "mise:mise:mise:mise"
+    "starship:-:starship:starship"
+    "delta:-:git-delta:git-delta"
+    "mise:-:mise:mise"
     "fzf:fzf:fzf:fzf"
     "fd|fdfind:fd-find:fd:fd"
     "zoxide:zoxide:zoxide:zoxide"
@@ -42,6 +42,7 @@ DEPS=(
 # Check which tools are missing
 missing=()
 missing_pkgs=()
+manual=()
 for dep in "${DEPS[@]}"; do
     IFS=: read -r cmd apt_pkg port_pkg brew_pkg <<< "$dep"
     # Check all alternate names (pipe-separated)
@@ -56,8 +57,10 @@ for dep in "${DEPS[@]}"; do
             brew) pkg=$brew_pkg ;;
         esac
         if [ "$pkg" != "-" ]; then
-            missing+=("$cmd")
+            missing+=("${cmd%%|*}")
             missing_pkgs+=("$pkg")
+        else
+            manual+=("${cmd%%|*}")
         fi
     fi
 done
@@ -82,6 +85,23 @@ if [ ${#missing[@]} -gt 0 ]; then
     fi
 else
     echo "All tool dependencies satisfied."
+fi
+
+# Print manual install instructions for tools not in package manager
+if [ ${#manual[@]} -gt 0 ]; then
+    echo ""
+    echo "=== Manual installs needed ==="
+    echo ""
+    echo "These tools aren't in $PM repos. Install manually:"
+    for tool in "${manual[@]}"; do
+        case $tool in
+            starship)  echo "  starship:  curl -sS https://starship.rs/install.sh | sh" ;;
+            delta)     echo "  delta:     https://github.com/dandavison/delta/releases" ;;
+            mise)      echo "  mise:      curl https://mise.run | sh" ;;
+            *)         echo "  $tool:     (no install instructions available)" ;;
+        esac
+    done
+    echo ""
 fi
 
 # Stow all packages
