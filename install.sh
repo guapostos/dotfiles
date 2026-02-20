@@ -37,6 +37,7 @@ DEPS=(
     "tmux:tmux:tmux:tmux"
     "git-lfs:git-lfs:git-lfs:git-lfs"
     "terminal-notifier:-:terminal-notifier:terminal-notifier"
+    "usage:-:usage:usage"
 )
 
 # Check which tools are missing
