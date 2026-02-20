@@ -37,7 +37,7 @@ DEPS=(
     "tmux:tmux:tmux:tmux"
     "git-lfs:git-lfs:git-lfs:git-lfs"
     "terminal-notifier:-:terminal-notifier:terminal-notifier"
-    "usage:-:usage:usage"
+    "usage:-:-:usage"
 )
 
 # Check which tools are missing
@@ -99,6 +99,7 @@ if [ ${#manual[@]} -gt 0 ]; then
             starship)  echo "  starship:  curl -sS https://starship.rs/install.sh | sh" ;;
             delta)     echo "  delta:     https://github.com/dandavison/delta/releases" ;;
             mise)      echo "  mise:      curl https://mise.run | sh" ;;
+            usage)     echo "  usage:     brew install usage  OR  cargo install usage-cli" ;;
             *)         echo "  $tool:     (no install instructions available)" ;;
         esac
     done
