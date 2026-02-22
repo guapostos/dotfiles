@@ -136,3 +136,6 @@ function penva --description "Activate virtualenv"
     test (count $argv) -eq 0; and echo "Usage: penva <name>"; and return 1
     source "$VIRTUALENV_DIR/$argv[1]/bin/activate.fish"
 end
+
+# Antigravity
+test -d ~/.antigravity/antigravity/bin; and fish_add_path ~/.antigravity/antigravity/bin
