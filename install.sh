@@ -109,7 +109,7 @@ fi
 # Stow all packages
 for pkg in alacritty claude agents bash fish git nix starship tmux zellij; do
     echo "Stowing $pkg..."
-    stow -t ~ "$pkg"
+    stow --no-folding -t ~ "$pkg"
 done
 
 # Stow private overlay (domain-specific skills/agents, not in public repo)
