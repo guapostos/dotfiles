@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+# Chain into per-repo hook if it exists.
+GIT_DIR="$(git rev-parse --git-dir 2>/dev/null)"
+if [ -n "$GIT_DIR" ] && [ -x "$GIT_DIR/hooks/commit-msg" ]; then
+    "$GIT_DIR/hooks/commit-msg" "$@" || exit $?
+fi
+
+# Strip AI co-author taglines from commit messages.
+sed -i '/^Co-Authored-By:.*\bclaude\b/Id' "$1"
+sed -i '/^Co-Authored-By:.*\banthropic\b/Id' "$1"
+# Remove any trailing blank lines left behind
+sed -i -e :a -e '/^\n*$/{$d;N;ba' -e '}' "$1"

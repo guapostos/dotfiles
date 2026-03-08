@@ -10,6 +10,7 @@
 	pager = delta
 	autocrlf = input
 	excludesFile = ~/.config/git/ignore
+	hooksPath = ~/.config/git/hooks
 
 [delta]
 	navigate = true
