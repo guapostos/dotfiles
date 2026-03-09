@@ -6,7 +6,8 @@ if [ -n "$GIT_DIR" ] && [ -x "$GIT_DIR/hooks/commit-msg" ]; then
 fi
 
 # Strip AI co-author taglines from commit messages.
-sed -i '/^Co-Authored-By:.*\bclaude\b/Id' "$1"
-sed -i '/^Co-Authored-By:.*\banthropic\b/Id' "$1"
-# Remove any trailing blank lines left behind
-sed -i -e :a -e '/^\n*$/{$d;N;ba' -e '}' "$1"
+# Use temp file for portability (BSD sed -i requires extension arg, GNU doesn't).
+tmp="$(mktemp)"
+sed '/^Co-Authored-By:.*[Cc]laude/d; /^Co-Authored-By:.*[Aa]nthropic/d' "$1" \
+    | sed -e :a -e '/^\n*$/{$d;N;ba' -e '}' > "$tmp"
+mv "$tmp" "$1"
