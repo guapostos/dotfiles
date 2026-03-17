@@ -19,3 +19,4 @@ fi
 if command -v starship &>/dev/null; then
     eval "$(starship init zsh)"
 fi
+export PATH=$PATH:$HOME/.maestro/bin
