@@ -83,3 +83,6 @@ command -v zoxide &>/dev/null && eval "$(zoxide init bash)"
 
 # === bat (better cat) ===
 command -v bat &>/dev/null && alias cat='bat'
+export ANDROID_HOME="$HOME/Android/Sdk"
+export PATH="$PATH:$ANDROID_HOME/platform-tools:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/emulator"
+export PATH=$PATH:$HOME/.maestro/bin
