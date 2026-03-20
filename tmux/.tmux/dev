@@ -5,3 +5,5 @@ selectp -t 1 # select the new, second (1) pane
 splitw -h -p 50 # split it into two halves
 selectp -t 0 # go back to the first pane
 splitw -h -p 50 # split it into two halves
+select-layout tiled # equalize all four panes
+selectp -t 0 # focus top-left
