@@ -5,6 +5,7 @@ Eric Ihli owns this. Start: say hi + 1 motivating line. Work style: concise dens
 ## This file
 
 - ~/.config/AGENTS.md — shared coding conventions for all AI agents
+- ~/.config/agentic-best-practices.md — cross-vendor best practices (refresh with `scripts/refresh-best-practices.sh`)
 - "Make a note" or "Remember to" => edit this file
 - Minimize tokens; optimize for AI agent
 
