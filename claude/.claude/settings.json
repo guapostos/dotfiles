@@ -18,6 +18,9 @@
       "Skill(commit:*)",
       "Skill(code-review:*)",
       "Skill(log-analyze:*)",
+      "Skill(session-notes:*)",
+      "Skill(prompt-search:*)",
+      "Skill(north-star:*)",
       "Bash(git:*)",
       "Bash(git status && echo *)",
       "Bash(gh:*)",
@@ -125,7 +128,7 @@
   "enabledPlugins": {
     "code-review@claude-plugins-official": true,
     "ralph-loop@claude-plugins-official": true,
-    "swift-lsp@claude-plugins-official": true
+    "swift-lsp@claude-plugins-official": false
   },
   "skipDangerousModePermissionPrompt": true,
   "effortLevel": "high"

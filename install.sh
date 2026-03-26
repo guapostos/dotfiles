@@ -106,7 +106,7 @@ if [ ${#manual[@]} -gt 0 ]; then
 fi
 
 # Stow all packages
-for pkg in claude agents bash fish git nix starship tmux zellij; do
+for pkg in age agents bash claude fish git nix starship tmux zellij; do
     echo "Stowing $pkg..."
     stow --no-folding -t ~ "$pkg"
 done

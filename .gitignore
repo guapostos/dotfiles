@@ -3,8 +3,6 @@
 *#*#
 __pycache__/
 *.pyc
-.emacs.d/eln-cache/
-.emacs.d/elpa/
 
 # Local overrides for claude settings (not tracked)
 settings.local.json
