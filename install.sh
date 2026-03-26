@@ -36,8 +36,7 @@ DEPS=(
     "bat|batcat:bat:bat:bat"
     "tmux:tmux:tmux:tmux"
     "git-lfs:git-lfs:git-lfs:git-lfs"
-    "terminal-notifier:-:terminal-notifier:terminal-notifier"
-    "usage:-:-:usage"
+    "jq:jq:jq:jq"
 )
 
 # Check which tools are missing
@@ -107,7 +106,7 @@ if [ ${#manual[@]} -gt 0 ]; then
 fi
 
 # Stow all packages
-for pkg in alacritty claude agents bash fish git nix starship tmux zellij; do
+for pkg in claude agents bash fish git nix starship tmux zellij; do
     echo "Stowing $pkg..."
     stow --no-folding -t ~ "$pkg"
 done
@@ -151,14 +150,3 @@ else
     echo "Warning: $PLUGINS_FILE not found. Run 'claude' once first to initialize."
 fi
 echo "Done! Symlinks created."
-echo ""
-echo "=== Manual steps ==="
-echo ""
-echo "# Claude cross-user notifications (if running claude as another user):"
-echo "sudo cp root/etc/tmpfiles.d/claude-notify.conf /etc/tmpfiles.d/"
-echo "sudo systemd-tmpfiles --create  # creates /run/claude-notify now"
-echo "systemctl --user daemon-reload"
-echo "systemctl --user enable --now claude-notify"
-echo ""
-echo "# Verify service running:"
-echo "systemctl --user status claude-notify"

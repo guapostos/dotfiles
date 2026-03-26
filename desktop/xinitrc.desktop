@@ -1,8 +1,0 @@
-[Desktop Entry]
-Name=StumpWM
-Comment=Executes the .xinitrc script in your home directory (which is hopefully StumpWM)
-Exec=/usr/bin/xinitrcsession-helper stumpwm
-TryExec=/usr/bin/xinitrcsession-helper
-Type=Application
-X-LightDM-Desktop-Name=StumpWM
-X-DesktopNames=StumpWM

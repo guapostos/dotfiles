@@ -1,19 +1,21 @@
 # Dotfiles
 
-Stow-managed dotfiles for Eric Ihli. Each top-level directory is a stow package that symlinks into `$HOME`.
+Stow-managed dotfiles for a remote SSH server. Each top-level directory is a stow package that symlinks into `$HOME`.
 
 ## Structure
 
 ```
 agents/     → ~/.config/AGENTS.md (shared AI agent conventions)
+bash/       → ~/.bashrc, ~/.zshrc (shell fallbacks)
 claude/     → ~/.claude/ (Claude Code settings, skills, hooks)
-fish/       → ~/.config/fish/ (shell)
+fish/       → ~/.config/fish/ (primary shell)
 git/        → ~/.config/git/ (git config, delta)
-zellij/     → ~/.config/zellij/ (terminal multiplexer)
-alacritty/  → ~/.config/alacritty/ (terminal)
+nix/        → ~/.config/nix/ (nix config)
 starship/   → ~/.config/starship.toml (prompt)
-nix/        → nix config
-tmux/       → ~/.config/tmux/ (legacy multiplexer)
+tmux/       → ~/.config/tmux/ (terminal multiplexer)
+zellij/     → ~/.config/zellij/ (terminal multiplexer)
+age/        → ~/.config/age/ (encryption recipients)
+scripts/    → utility scripts
 ```
 
 ## Usage

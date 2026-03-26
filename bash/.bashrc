@@ -25,18 +25,8 @@ if [[ -z "$COLORTERM" && "$TERM" =~ (256color|alacritty|kitty|tmux|screen) ]]; t
     export COLORTERM=truecolor
 fi
 
-# === PATH (platform-aware) ===
+# === PATH ===
 export PATH="$HOME/.local/bin:$HOME/bin:$HOME/.cargo/bin:$PATH"
-case "$(uname)" in
-    Darwin)
-        # Homebrew (Apple Silicon then Intel) + MacPorts
-        [ -d /opt/homebrew/bin ] && export PATH="/opt/homebrew/bin:/opt/homebrew/sbin:$PATH"
-        [ -d /usr/local/bin ] && export PATH="/usr/local/bin:/usr/local/sbin:$PATH"
-        [ -d /opt/local/bin ] && export PATH="/opt/local/bin:/opt/local/sbin:$PATH"
-        ;;
-esac
-
-# Go binaries
 [ -d "$HOME/go/bin" ] && export PATH="$HOME/go/bin:$PATH"
 
 # === Git aliases ===
@@ -55,12 +45,6 @@ alias gcm='git commit -m'
 alias gsw='git switch'
 alias gswc='git switch -c'
 alias grb='git rebase'
-
-# === Cross-platform clipboard ===
-case "$(uname)" in
-    Darwin) alias xcp='pbcopy'; alias xpaste='pbpaste' ;;
-    *)      alias xcp='xclip -selection clipboard'; alias xpaste='xclip -selection clipboard -o' ;;
-esac
 
 # === Tools (if available) ===
 command -v mise &>/dev/null && eval "$(mise activate bash)"
@@ -83,6 +67,3 @@ command -v zoxide &>/dev/null && eval "$(zoxide init bash)"
 
 # === bat (better cat) ===
 command -v bat &>/dev/null && alias cat='bat'
-export ANDROID_HOME="$HOME/Android/Sdk"
-export PATH="$PATH:$ANDROID_HOME/platform-tools:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/emulator"
-export PATH=$PATH:$HOME/.maestro/bin

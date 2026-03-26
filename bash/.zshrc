@@ -1,13 +1,9 @@
-# Bootstrap PATH for macOS (Homebrew, MacPorts) and Linux
+# Bootstrap PATH
 path=(
     $HOME/.local/bin
     $HOME/bin
-    /opt/homebrew/bin      # macOS Homebrew (Apple Silicon)
-    /opt/homebrew/sbin
-    /usr/local/bin         # macOS Homebrew (Intel) / Linux
+    /usr/local/bin
     /usr/local/sbin
-    /opt/local/bin         # macOS MacPorts
-    /opt/local/sbin
     $path
 )
 typeset -U path  # dedupe
@@ -19,4 +15,3 @@ fi
 if command -v starship &>/dev/null; then
     eval "$(starship init zsh)"
 fi
-export PATH=$PATH:$HOME/.maestro/bin

@@ -1,4 +1,0 @@
-{:dependencies
- [[cider/cider-nrepl "0.26.0"]
-  [refactor-nrepl/refactor-nrepl "2.5.0"]
-  [nrepl/nrepl "RELEASE"]]}

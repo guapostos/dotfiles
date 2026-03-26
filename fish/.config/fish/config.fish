@@ -25,16 +25,6 @@ abbr gf "git fetch"
 abbr gca "git commit --amend"
 abbr gcam "git commit -am"
 
-# === Cross-platform clipboard ===
-switch (uname)
-    case Darwin
-        abbr xcp "pbcopy"
-        abbr xpaste "pbpaste"
-    case '*'
-        abbr xcp "xclip -selection clipboard"
-        abbr xpaste "xclip -selection clipboard -o"
-end
-
 # === Environment ===
 set -gx XDG_STATE_HOME $HOME/.local/state
 set -gx XDG_CONFIG_HOME $HOME/.config
@@ -54,12 +44,6 @@ fish_add_path $HOME/.local/bin
 fish_add_path $HOME/bin
 fish_add_path $HOME/.cargo/bin
 fish_add_path $HOME/go/bin
-# Emacs (self-compiled)
-fish_add_path $HOME/src/emacs/nextstep/Emacs.app/Contents/MacOS
-# macOS: Homebrew (Apple Silicon, Intel) + MacPorts
-fish_add_path /opt/homebrew/bin /opt/homebrew/sbin
-fish_add_path /usr/local/bin /usr/local/sbin
-fish_add_path /opt/local/bin /opt/local/sbin
 
 # === mise (replaces pyenv/nvm/rbenv) ===
 if type -q mise
@@ -139,5 +123,3 @@ function penva --description "Activate virtualenv"
     source "$VIRTUALENV_DIR/$argv[1]/bin/activate.fish"
 end
 
-# Antigravity
-test -d ~/.antigravity/antigravity/bin; and fish_add_path ~/.antigravity/antigravity/bin
