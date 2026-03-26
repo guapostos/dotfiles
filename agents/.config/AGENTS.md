@@ -108,7 +108,7 @@ Never pollute $HOME with dotfiles/dotdirs.
 - Web search early
 - Read external docs early
 - **New projects**: copy pre-commit config + `ast-grep/rules/` from `~/.claude/conventions/`
-- **New projects**: use `/north-star` to create NORTH_STAR.md — immutable design contract for LLM agents (locked constraints, killed approaches with evidence, layer gates, decision log). Optionally add ROADMAP.md (vision) + PROMPT.md (current phase)
+- **New projects**: use `/north-star` to create SPEC.md — immutable design contract for LLM agents (locked constraints, killed approaches with evidence, layer gates, decision log)
 
 ## Documentation
 

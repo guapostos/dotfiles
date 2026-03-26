@@ -26,16 +26,24 @@ elif [ -n "$PROJECT" ]; then
     CTX="[$PROJECT] "
 fi
 
-# Send notification via FIFO (cross-user) or direct (same-user fallback)
-NOTIFY_PIPE="/run/claude-notify/pipe"
 FULL_MSG="$CTX$MSG"
 NOTIFY_TITLE="${TITLE:-Claude Code}"
 
-if [ -p "$NOTIFY_PIPE" ]; then
-    echo "${NOTIFY_TITLE}|${FULL_MSG}" > "$NOTIFY_PIPE" 2>/dev/null || true
+# Find a writable tty for escape sequences
+TTY="${SSH_TTY:-}"
+[ -z "$TTY" ] && TTY="/dev/tty"
+
+# 1. TTY available: bell + OSC 777 (propagates through SSH/tmux to local terminal)
+if [ -w "$TTY" ]; then
+    printf '\a' > "$TTY" 2>/dev/null || true
+    printf '\033]777;notify;%s;%s\033\\' "$NOTIFY_TITLE" "$FULL_MSG" > "$TTY" 2>/dev/null || true
+# 2. FIFO pipe
+elif [ -p "/run/claude-notify/pipe" ]; then
+    echo "${NOTIFY_TITLE}|${FULL_MSG}" > "/run/claude-notify/pipe" 2>/dev/null || true
+# 3. Desktop notification
 else
     case $(uname) in
-        Darwin) terminal-notifier -title 'Claude Code' -message "$FULL_MSG" -sound Glass ;;
-        *) [ -n "$DISPLAY" ] && notify-send 'Claude Code' "$FULL_MSG" 2>/dev/null || true ;;
+        Darwin) terminal-notifier -title "$NOTIFY_TITLE" -message "$FULL_MSG" -sound Glass 2>/dev/null || true ;;
+        *) [ -n "$DISPLAY$WAYLAND_DISPLAY" ] && notify-send "$NOTIFY_TITLE" "$FULL_MSG" 2>/dev/null || true ;;
     esac
 fi
