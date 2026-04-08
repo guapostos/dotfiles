@@ -1,0 +1,4 @@
+interface:
+  display_name: "Next"
+  short_description: "Resume a project and suggest the next tasks"
+  default_prompt: "Use $next to inspect the current project state, run focused verification, clean stale planning notes, and propose the next tasks."

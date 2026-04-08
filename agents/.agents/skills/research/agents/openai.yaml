@@ -1,0 +1,4 @@
+interface:
+  display_name: "Research"
+  short_description: "Research first, then write a design note"
+  default_prompt: "Use $research to gather external evidence, codebase context, and pitfalls before proposing an implementation approach."

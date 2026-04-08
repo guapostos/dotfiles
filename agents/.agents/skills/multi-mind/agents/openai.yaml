@@ -1,0 +1,4 @@
+interface:
+  display_name: "Multi-Mind"
+  short_description: "Analyze a topic through multiple specialist viewpoints"
+  default_prompt: "Use $multi-mind to run a multi-perspective analysis with several specialist passes or subagents, then synthesize the results."

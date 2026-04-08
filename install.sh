@@ -20,6 +20,33 @@ link_shared_doc() {
     echo "Linked $target -> $source"
 }
 
+link_shared_dir() {
+    local target="$1"
+    local source="$2"
+
+    mkdir -p "$(dirname "$target")"
+
+    if [ -L "$target" ] || [ ! -e "$target" ]; then
+        ln -sfn "$source" "$target"
+        echo "Linked $target -> $source"
+        return
+    fi
+
+    if [ -d "$target" ]; then
+        if find "$target" -mindepth 1 ! \( -type d -o -type l \) -print -quit | grep -q .; then
+            echo "Skipping $target (directory contains non-symlink files)"
+            return
+        fi
+
+        rm -rf "$target"
+        ln -sfn "$source" "$target"
+        echo "Replaced $target -> $source"
+        return
+    fi
+
+    echo "Skipping $target (exists and is not a symlink or directory)"
+}
+
 # Detect package manager
 if command -v port &> /dev/null; then
     PM=port
@@ -158,6 +185,23 @@ if [ -f "$SHARED_AGENTS" ]; then
         echo "Linked $HOME/.claude/CLAUDE.md -> $SHARED_AGENTS"
     fi
 fi
+
+SHARED_SKILLS_ROOT="$HOME/.agents/skills"
+SHARED_SKILLS=(
+    "checkpoint"
+    "multi-mind"
+    "next"
+    "research"
+    "session-notes"
+)
+
+for skill in "${SHARED_SKILLS[@]}"; do
+    if [ -d "$SHARED_SKILLS_ROOT/$skill" ]; then
+        link_shared_dir "$HOME/.claude/skills/$skill" "$SHARED_SKILLS_ROOT/$skill"
+        link_shared_dir "$HOME/.codex/skills/$skill" "$SHARED_SKILLS_ROOT/$skill"
+        link_shared_dir "$HOME/.config/opencode/skills/$skill" "$SHARED_SKILLS_ROOT/$skill"
+    fi
+done
 
 # Register lisa plugin if not already registered
 PLUGINS_FILE=~/.claude/plugins/installed_plugins.json

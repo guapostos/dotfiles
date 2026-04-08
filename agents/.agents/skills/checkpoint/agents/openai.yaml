@@ -1,0 +1,4 @@
+interface:
+  display_name: "Checkpoint"
+  short_description: "Save or restore compact working-state snapshots"
+  default_prompt: "Use $checkpoint to save, load, or list compact working-state checkpoints for the current task."

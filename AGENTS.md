@@ -32,9 +32,12 @@ stow -D -t ~ <package>
 - Claude-specific global additions live in `~/.claude/CLAUDE.md`.
 - This repo-level `AGENTS.md` is the shared project instructions file for tools that support `AGENTS.md`.
 - `CLAUDE.md` in this repo imports this file so Claude Code reads the same project instructions.
+- Portable shared skills live in `~/.agents/skills/`.
+- Tool-native skill links point to the shared skill directory for the migrated portable skills.
 
 ## Skills And Private Overlay
 
-- Public Claude skills live in `claude/.claude/skills/`.
+- Portable cross-tool skills live in `agents/.agents/skills/`.
+- Claude-only skills remain in `claude/.claude/skills/`.
 - Private Claude skills and agents live in `~/src/dotfiles-private/claude-private/`.
 - The local gitignored `claude-private -> ../dotfiles-private/claude-private` symlink lets `stow` merge the private overlay into `~/.claude/`.

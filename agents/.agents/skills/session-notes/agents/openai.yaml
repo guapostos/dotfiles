@@ -1,0 +1,4 @@
+interface:
+  display_name: "Session Notes"
+  short_description: "Summarize the session and append durable progress notes"
+  default_prompt: "Use $session-notes to summarize the current session from repository state and append durable progress notes for the next session."
