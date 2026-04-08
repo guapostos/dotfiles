@@ -1,7 +1,8 @@
 ---
-name: "verify-app"
 description: "Run full quality gate. Use after completing work or proactively to check project health."
-model: "sonnet"
+mode: "subagent"
+permission:
+  edit: "deny"
 ---
 
 Run the project's quality gates and report status.

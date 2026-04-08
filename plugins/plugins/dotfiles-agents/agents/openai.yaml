@@ -1,0 +1,4 @@
+interface:
+  display_name: "Dotfiles Agents"
+  short_description: "Use local specialist agents for debugging, review, verification, logs, and simplification"
+  default_prompt: "Use Dotfiles Agents when you need a focused specialist for debugging, code review, log analysis, app verification, or code simplification."

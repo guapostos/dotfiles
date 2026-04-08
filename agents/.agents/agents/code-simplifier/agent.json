@@ -1,0 +1,13 @@
+{
+  "name": "code-simplifier",
+  "description": "Use this agent when you want to reduce complexity, verbosity, or redundancy in existing code. Triggers include: after completing a feature and wanting to clean it up, when a file feels bloated or hard to follow, when you notice repeated patterns that could be abstracted, when code 'works but feels wrong', or when explicitly asked to simplify, refactor for clarity, or reduce LOC. Do NOT use for adding features, fixing bugs, or initial implementation.\\n\\nExamples:\\n\\n<example>\\nContext: User just finished implementing a feature with multiple similar handler functions.\\nuser: \"I just added those three webhook handlers. They work but the code feels repetitive.\"\\nassistant: \"I notice the handlers share similar patterns. Let me use the code-simplifier agent to identify consolidation opportunities.\"\\n<Task tool call to code-simplifier>\\n</example>\\n\\n<example>\\nContext: User is reviewing a file that grew organically over time.\\nuser: \"This utils.py file is 400 lines now and I'm not sure what half of it does.\"\\nassistant: \"I'll use the code-simplifier agent to analyze the file, identify dead code, and suggest structural improvements.\"\\n<Task tool call to code-simplifier>\\n</example>\\n\\n<example>\\nContext: After implementing a complex feature, proactively simplifying.\\nuser: \"Okay the auth flow is working now.\"\\nassistant: \"The auth flow is functional. Before moving on, let me use the code-simplifier agent to review the implementation for any opportunities to reduce complexity while the logic is fresh.\"\\n<Task tool call to code-simplifier>\\n</example>",
+  "claude": {
+    "model": "opus"
+  },
+  "opencode": {
+    "mode": "subagent"
+  },
+  "codex": {
+    "enabled": true
+  }
+}

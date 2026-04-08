@@ -12,6 +12,8 @@ claude/.claude/plugins/
 
 # Private overlay symlink (points to ../dotfiles-private/claude-private)
 claude-private
+agents-private
+opencode-private
 
 # Fish auto-generated
 fish_variables

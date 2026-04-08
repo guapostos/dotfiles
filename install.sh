@@ -5,6 +5,8 @@
 set -e
 cd "$(dirname "$0")"
 
+python3 scripts/render-agent-surfaces.py
+
 link_shared_doc() {
     local target="$1"
     local source="$2"
@@ -147,29 +149,38 @@ if [ ${#manual[@]} -gt 0 ]; then
     echo ""
 fi
 
+ensure_private_pkg_symlink() {
+    local name="$1"
+
+    if [ ! -e "$name" ] && [ -d "../dotfiles-private/$name" ]; then
+        ln -sfn "../dotfiles-private/$name" "$name"
+        echo "Linked local private package symlink: $name"
+    fi
+}
+
+stow_optional_private_pkg() {
+    local name="$1"
+    ensure_private_pkg_symlink "$name"
+
+    if [ -L "$name" ] && [ -d "$name" ]; then
+        echo "Stowing private package: $name"
+        stow -t ~ "$name"
+        return
+    fi
+
+    echo "No private package found for $name (optional)."
+}
+
 # Stow all packages
-for pkg in age agents bash claude fish git nix starship tmux zellij; do
+for pkg in age agents bash claude fish git nix opencode plugins starship tmux zellij; do
     echo "Stowing $pkg..."
     stow --no-folding -t ~ "$pkg"
 done
 
-# Stow private overlay (domain-specific skills/agents, not in public repo)
-# Uses symlink: claude-private -> ../dotfiles-private/claude-private
-# Stow from same dir enables tree folding (merges into shared ~/.claude/)
-if [ ! -e claude-private ] && [ -d ../dotfiles-private/claude-private ]; then
-    ln -sfn ../dotfiles-private/claude-private claude-private
-    echo "Linked local private overlay symlink"
-fi
-
-if [ -L claude-private ] && [ -d claude-private ]; then
-    echo "Stowing private overlay..."
-    stow -t ~ claude-private
-else
-    echo "No private overlay found (optional). To add:"
-    echo "  git clone <private-repo> ~/src/dotfiles-private"
-    echo "  ln -sfn ../dotfiles-private/claude-private ~/src/dotfiles/claude-private"
-    echo "  stow -t ~ claude-private"
-fi
+# Stow private overlays (domain-specific skills/agents not in the public repo).
+for pkg in agents-private claude-private opencode-private; do
+    stow_optional_private_pkg "$pkg"
+done
 
 # Link shared AGENTS.md into tools that natively read AGENTS.md
 SHARED_AGENTS="$HOME/.config/AGENTS.md"
@@ -187,21 +198,15 @@ if [ -f "$SHARED_AGENTS" ]; then
 fi
 
 SHARED_SKILLS_ROOT="$HOME/.agents/skills"
-SHARED_SKILLS=(
-    "checkpoint"
-    "multi-mind"
-    "next"
-    "research"
-    "session-notes"
-)
-
-for skill in "${SHARED_SKILLS[@]}"; do
-    if [ -d "$SHARED_SKILLS_ROOT/$skill" ]; then
-        link_shared_dir "$HOME/.claude/skills/$skill" "$SHARED_SKILLS_ROOT/$skill"
-        link_shared_dir "$HOME/.codex/skills/$skill" "$SHARED_SKILLS_ROOT/$skill"
-        link_shared_dir "$HOME/.config/opencode/skills/$skill" "$SHARED_SKILLS_ROOT/$skill"
-    fi
-done
+if [ -d "$SHARED_SKILLS_ROOT" ]; then
+    for skill_dir in "$SHARED_SKILLS_ROOT"/*; do
+        [ -d "$skill_dir" ] || continue
+        skill="$(basename "$skill_dir")"
+        link_shared_dir "$HOME/.claude/skills/$skill" "$skill_dir"
+        link_shared_dir "$HOME/.codex/skills/$skill" "$skill_dir"
+        link_shared_dir "$HOME/.config/opencode/skills/$skill" "$skill_dir"
+    done
+fi
 
 # Register lisa plugin if not already registered
 PLUGINS_FILE=~/.claude/plugins/installed_plugins.json
