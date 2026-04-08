@@ -5,6 +5,21 @@
 set -e
 cd "$(dirname "$0")"
 
+link_shared_doc() {
+    local target="$1"
+    local source="$2"
+
+    mkdir -p "$(dirname "$target")"
+
+    if [ -e "$target" ] && [ ! -L "$target" ]; then
+        echo "Skipping $target (exists and is not a symlink)"
+        return
+    fi
+
+    ln -sfn "$source" "$target"
+    echo "Linked $target -> $source"
+}
+
 # Detect package manager
 if command -v port &> /dev/null; then
     PM=port
@@ -114,6 +129,11 @@ done
 # Stow private overlay (domain-specific skills/agents, not in public repo)
 # Uses symlink: claude-private -> ../dotfiles-private/claude-private
 # Stow from same dir enables tree folding (merges into shared ~/.claude/)
+if [ ! -e claude-private ] && [ -d ../dotfiles-private/claude-private ]; then
+    ln -sfn ../dotfiles-private/claude-private claude-private
+    echo "Linked local private overlay symlink"
+fi
+
 if [ -L claude-private ] && [ -d claude-private ]; then
     echo "Stowing private overlay..."
     stow -t ~ claude-private
@@ -124,11 +144,19 @@ else
     echo "  stow -t ~ claude-private"
 fi
 
-# Symlink AGENTS.md to CLAUDE.md for Claude Code
-if [ -f ~/.config/AGENTS.md ] && [ ! -e ~/.claude/CLAUDE.md ]; then
-    mkdir -p ~/.claude
-    ln -sf ~/.config/AGENTS.md ~/.claude/CLAUDE.md
-    echo "Symlinked AGENTS.md to ~/.claude/CLAUDE.md"
+# Link shared AGENTS.md into tools that natively read AGENTS.md
+SHARED_AGENTS="$HOME/.config/AGENTS.md"
+if [ -f "$SHARED_AGENTS" ]; then
+    link_shared_doc "$HOME/.codex/AGENTS.md" "$SHARED_AGENTS"
+    link_shared_doc "$HOME/.config/opencode/AGENTS.md" "$SHARED_AGENTS"
+
+    # Claude Code still needs CLAUDE.md. Fall back to shared AGENTS.md only if
+    # no Claude-specific global file exists yet.
+    if [ ! -e "$HOME/.claude/CLAUDE.md" ]; then
+        mkdir -p "$HOME/.claude"
+        ln -sfn "$SHARED_AGENTS" "$HOME/.claude/CLAUDE.md"
+        echo "Linked $HOME/.claude/CLAUDE.md -> $SHARED_AGENTS"
+    fi
 fi
 
 # Register lisa plugin if not already registered
