@@ -49,6 +49,43 @@ link_shared_dir() {
     echo "Skipping $target (exists and is not a symlink or directory)"
 }
 
+link_compat_file() {
+    local legacy_target="$1"
+    local source="$2"
+    local legacy_norm
+    local source_norm
+
+    mkdir -p "$(dirname "$legacy_target")"
+
+    if [ -L "$legacy_target" ] || [ ! -e "$legacy_target" ]; then
+        ln -sfn "$source" "$legacy_target"
+        echo "Linked $legacy_target -> $source"
+        return
+    fi
+
+    if cmp -s "$legacy_target" "$source"; then
+        rm -f "$legacy_target"
+        ln -sfn "$source" "$legacy_target"
+        echo "Replaced identical legacy file $legacy_target -> $source"
+        return
+    fi
+
+    legacy_norm="$(mktemp)"
+    source_norm="$(mktemp)"
+    if jq -S . "$legacy_target" >"$legacy_norm" 2>/dev/null && jq -S . "$source" >"$source_norm" 2>/dev/null; then
+        if cmp -s "$legacy_norm" "$source_norm"; then
+            rm -f "$legacy_norm" "$source_norm"
+            rm -f "$legacy_target"
+            ln -sfn "$source" "$legacy_target"
+            echo "Replaced equivalent legacy JSON $legacy_target -> $source"
+            return
+        fi
+    fi
+    rm -f "$legacy_norm" "$source_norm"
+
+    echo "Skipping $legacy_target (legacy file differs from managed config)"
+}
+
 # Detect package manager
 if command -v port &> /dev/null; then
     PM=port
@@ -172,9 +209,18 @@ stow_optional_private_pkg() {
 }
 
 # Stow all packages
-for pkg in age agents bash claude fish git nix opencode plugins starship tmux zellij; do
+for pkg in age agents bash fish git nix opencode claude plugins starship tmux zellij; do
     echo "Stowing $pkg..."
     stow --no-folding -t ~ "$pkg"
+
+    if [ "$pkg" = "opencode" ]; then
+        OPENCODE_CONFIG="$HOME/.config/opencode/opencode.json"
+        if [ -f "$OPENCODE_CONFIG" ]; then
+            # Keep the legacy install tree compatible while making the XDG path
+            # the canonical source of truth.
+            link_compat_file "$HOME/.opencode/opencode.json" "$OPENCODE_CONFIG"
+        fi
+    fi
 done
 
 # Stow private overlays (domain-specific skills/agents not in the public repo).
@@ -208,22 +254,4 @@ if [ -d "$SHARED_SKILLS_ROOT" ]; then
     done
 fi
 
-# Register lisa plugin if not already registered
-PLUGINS_FILE=~/.claude/plugins/installed_plugins.json
-if [ -f "$PLUGINS_FILE" ]; then
-    if ! grep -q '"lisa@local"' "$PLUGINS_FILE"; then
-        echo "Registering lisa plugin..."
-        # Add lisa entry to installed_plugins.json
-        jq '.plugins["lisa@local"] = [{
-            "scope": "user",
-            "installPath": "'"$HOME"'/.claude/plugins/cache/local/lisa/1.0.0",
-            "version": "1.0.0",
-            "installedAt": "'"$(date -u +%Y-%m-%dT%H:%M:%SZ)"'",
-            "lastUpdated": "'"$(date -u +%Y-%m-%dT%H:%M:%SZ)"'"
-        }]' "$PLUGINS_FILE" > "$PLUGINS_FILE.tmp" && mv "$PLUGINS_FILE.tmp" "$PLUGINS_FILE"
-        echo "Lisa plugin registered"
-    fi
-else
-    echo "Warning: $PLUGINS_FILE not found. Run 'claude' once first to initialize."
-fi
 echo "Done! Symlinks created."

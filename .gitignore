@@ -7,9 +7,6 @@ __pycache__/
 # Local overrides for claude settings (not tracked)
 settings.local.json
 
-# Claude Code plugins (auto-generated, machine-local paths)
-claude/.claude/plugins/
-
 # Private overlay symlink (points to ../dotfiles-private/claude-private)
 claude-private
 agents-private

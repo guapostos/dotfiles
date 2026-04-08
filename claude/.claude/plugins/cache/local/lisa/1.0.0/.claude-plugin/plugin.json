@@ -1,8 +1,0 @@
-{
-  "name": "lisa",
-  "version": "1.0.0",
-  "description": "Local fork of Ralph Wiggum technique - continuous self-referential AI loops for iterative development.",
-  "author": {
-    "name": "Eric Ihli"
-  }
-}
