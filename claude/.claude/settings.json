@@ -124,7 +124,7 @@
   },
   "enabledPlugins": {
     "code-review@claude-plugins-official": true,
-    "ralph-loop@claude-plugins-official": true,
+    "ralph-loop@claude-plugins-official": false,
     "swift-lsp@claude-plugins-official": true
   },
   "skipDangerousModePermissionPrompt": true,
