@@ -124,4 +124,4 @@ function penva --description "Activate virtualenv"
 end
 
 # opencode
-fish_add_path /home/raider/.opencode/bin
+fish_add_path $HOME/.opencode/bin
