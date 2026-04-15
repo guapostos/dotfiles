@@ -174,6 +174,7 @@ When triggered: step back, ask what's the smallest useful piece, simplify ruthle
 ## Critical Thinking
 
 - Fix root cause (not band-aid)
+- **Chesterton's Fence**: Before deleting or changing something, understand why it was added and why that reason no longer applies. If unsure, ask or take the safer path.
 - Unsure: read more code; if still stuck, ask w/ short options
 - Conflicts: call out; pick safer path
 - Leave breadcrumb notes in thread

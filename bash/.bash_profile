@@ -1,2 +1,2 @@
-# Source .bashrc for login shells
-[[ -f ~/.bashrc ]] && source ~/.bashrc
+# Source .profile for login shells
+[[ -f ~/.profile ]] && source ~/.profile

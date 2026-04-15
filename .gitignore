@@ -14,3 +14,6 @@ opencode-private
 
 # Fish auto-generated
 fish_variables
+
+# Local Codex scratch file/dir at repo root
+/.codex
