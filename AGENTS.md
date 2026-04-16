@@ -39,6 +39,13 @@ stow -D -t ~ <package>
 - Tool-native skill links point to the shared skill directory for the migrated portable skills.
 - The canonical Codex plugin registry is `agents/.agents/plugins/marketplace.json`; add future local plugins there rather than editing `~/.agents/plugins/marketplace.json` by hand.
 
+## Canonical Sources
+
+- Edit canonical sources, not generated wrappers.
+- Source-of-truth portable agents live in `agents/.agents/agents/`.
+- Source-of-truth portable skills live in `agents/.agents/skills/`.
+- Do not hand-edit generated wrappers under `opencode/.config/opencode/agents/` or `plugins/plugins/dotfiles-agents/agents/`; they are rendered by `scripts/render-agent-surfaces.py` and refreshed by `./install.sh`.
+
 ## Skills And Private Overlay
 
 - Portable cross-tool agent sources live in `agents/.agents/agents/`.

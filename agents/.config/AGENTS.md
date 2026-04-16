@@ -25,19 +25,16 @@ Eric Ihli owns this. Start: say hi + 1 motivating line. Work style: concise dens
 
 ## Before Implementing
 
-**STOP. DO NOT WRITE CODE YET.** Misunderstanding requirements wastes hours.
+- Restate the goal in 1-2 sentences
+- Clarify ambiguity before coding; ask, don't assume
+- For small clear low-risk changes, proceed after a brief restatement
+- Have context: existing code, patterns, constraints
+- Start with the smallest testable version
+- Response >50 lines or >3 files? Simplify or break down
 
-- [ ] Restate the goal in 1-2 sentences
-- [ ] Clarify ambiguity — ask, don't assume
-- [ ] Confirm understanding — get explicit "yes"
-- [ ] Describe approach — let user catch misalignment early
-- [ ] Have context? (existing code, patterns, constraints)
-- [ ] Can start with simple testable version?
-- [ ] Response >50 lines or >3 files? Simplify or break down.
+**Blast radius**: 1-2 files → just do it; 3-5 → plan first; 5+ → `working-spec.md` + subagents/parallel agents when available
 
-**Blast radius**: 1-2 files → just do it; 3-5 → plan mode; 5+ → working-spec + parallel agents
-
-**STOP if**: you're guessing intent, multiple interpretations exist, architectural decisions weren't specified, or touching unfamiliar code. High-level planning is fine — but implement one specific piece at a time.
+**STOP if**: you're guessing intent, multiple interpretations exist, architectural decisions weren't specified, destructive/external side effects are involved, or you're touching unfamiliar code without a clear precedent. High-level planning is fine — but implement one specific piece at a time.
 
 ## Coding
 
@@ -77,7 +74,7 @@ Comments should add value beyond what code says:
 
 ### Logging
 
-- Follow `~/.claude/conventions/logging.md` for directory layout and format
+- If a project/user logging convention doc exists, follow it for layout and format
 - JSON lines format, `runs/{timestamp}_{sha}[_dirty]/` dirs, `latest` symlink
 - Output useful to AI agents: clean, structured, min tokens, max info
 - Use log levels appropriately
@@ -107,8 +104,8 @@ Never pollute $HOME with dotfiles/dotdirs.
 
 - Web search early
 - Read external docs early
-- **New projects**: copy pre-commit config + `ast-grep/rules/` from `~/.claude/conventions/`
-- **New projects**: use `/north-star` to create SPEC.md — immutable design contract for LLM agents (locked constraints, killed approaches with evidence, layer gates, decision log)
+- **New projects**: start from shared pre-commit and static-analysis templates if available
+- **Large new projects**: write `SPEC.md` as an immutable design contract for LLM agents: locked constraints, killed approaches with evidence, layer gates, decision log
 
 ## Documentation
 
@@ -123,7 +120,7 @@ Never pollute $HOME with dotfiles/dotdirs.
 ## Build / Test
 
 - Before handoff: run full gate (lint, types, tests, docs)
-- Use `/review` skill for critical review before complete
+- Run a critical review pass before complete; use tool support when available
 - **Refactoring budget**: ~20% agent time on cleanup — dead code, dedup, `ruff check --fix`
 - **Handoff summary**: findings, choices made, results (what changed and why)
 
@@ -132,8 +129,7 @@ Never pollute $HOME with dotfiles/dotdirs.
 For multi-session/overnight autonomous work:
 - **One feature at a time** - complete, test, commit before next
 - **Session startup**: `pwd` → read git log/progress → verify baseline → then work
-- **Use `/long-session`** to set up progress tracking artifacts
-- Update `claude-progress.txt` before session ends
+- Use a lightweight progress artifact for multi-session work
 
 ## Git
 
