@@ -29,7 +29,7 @@ if [[ -z "$COLORTERM" && "$TERM" =~ (256color|alacritty|kitty|tmux|screen) ]]; t
 fi
 
 # === PATH (platform-aware) ===
-export PATH="$HOME/.local/bin:$HOME/bin:$HOME/.cargo/bin:$PATH"
+export PATH="$HOME/.local/bin:$HOME/bin:$PATH"
 case "$(uname)" in
     Darwin)
         # Homebrew (Apple Silicon then Intel) + MacPorts

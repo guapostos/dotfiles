@@ -57,7 +57,11 @@ end
 # === PATH (fish_add_path only adds if dir exists) ===
 fish_add_path $HOME/.local/bin
 fish_add_path $HOME/bin
-fish_add_path $HOME/.cargo/bin
+if test -f $HOME/.cargo/env.fish
+    source $HOME/.cargo/env.fish
+else
+    fish_add_path $HOME/.cargo/bin
+end
 fish_add_path $HOME/go/bin
 # Emacs (self-compiled)
 fish_add_path $HOME/src/emacs/nextstep/Emacs.app/Contents/MacOS

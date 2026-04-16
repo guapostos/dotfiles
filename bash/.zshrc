@@ -2,6 +2,7 @@
 path=(
     $HOME/.local/bin
     $HOME/bin
+    $HOME/.cargo/bin        # Prefer rustup-managed Rust toolchain
     /opt/homebrew/bin      # macOS Homebrew (Apple Silicon)
     /opt/homebrew/sbin
     /usr/local/bin         # macOS Homebrew (Intel) / Linux
