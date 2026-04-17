@@ -1,0 +1,184 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+    cat <<'EOF'
+Usage: scb <server> <remote-path>
+
+Stream the image currently in your local clipboard to a file over SSH.
+Run this on the machine that owns the clipboard, not inside the remote shell.
+
+Examples:
+  scb raider /tmp/chart.png
+  scb user@example.com ~/incoming/screenshot.png
+
+Backends:
+  - Wayland: wl-paste
+  - X11: xclip
+  - macOS: pngpaste
+EOF
+}
+
+die() {
+    printf 'scb: %s\n' "$*" >&2
+    exit 1
+}
+
+shell_quote() {
+    printf "'%s'" "${1//\'/\'\\\'\'}"
+}
+
+prefer_image_mime() {
+    local mime
+    for mime in image/png image/jpeg image/webp image/gif image/tiff image/bmp; do
+        printf '%s\n' "$mime"
+    done
+}
+
+pick_wayland_mime() {
+    local targets mime
+    targets="$(wl-paste --list-types 2>/dev/null || true)"
+    [[ -n "$targets" ]] || return 1
+
+    while IFS= read -r mime; do
+        if grep -Fxq "$mime" <<<"$targets"; then
+            printf '%s\n' "$mime"
+            return 0
+        fi
+    done < <(prefer_image_mime)
+
+    return 1
+}
+
+pick_xclip_mime() {
+    local targets mime
+    targets="$(xclip -selection clipboard -t TARGETS -o 2>/dev/null | tr ' ' '\n' || true)"
+    [[ -n "$targets" ]] || return 1
+
+    while IFS= read -r mime; do
+        if grep -Fxq "$mime" <<<"$targets"; then
+            printf '%s\n' "$mime"
+            return 0
+        fi
+    done < <(prefer_image_mime)
+
+    return 1
+}
+
+detect_backend() {
+    local mime
+
+    if [[ -n "${WAYLAND_DISPLAY:-}" ]] && command -v wl-paste >/dev/null 2>&1; then
+        mime="$(pick_wayland_mime || true)"
+        if [[ -n "$mime" ]]; then
+            printf 'wayland\t%s\n' "$mime"
+            return 0
+        fi
+    fi
+
+    if [[ -n "${DISPLAY:-}" ]] && command -v xclip >/dev/null 2>&1; then
+        mime="$(pick_xclip_mime || true)"
+        if [[ -n "$mime" ]]; then
+            printf 'x11\t%s\n' "$mime"
+            return 0
+        fi
+    fi
+
+    if command -v pngpaste >/dev/null 2>&1; then
+        printf 'macos\timage/png\n'
+        return 0
+    fi
+
+    return 1
+}
+
+stream_clipboard() {
+    local backend=$1
+    local mime=$2
+
+    case "$backend" in
+        wayland)
+            wl-paste --type "$mime"
+            ;;
+        x11)
+            xclip -selection clipboard -t "$mime" -o
+            ;;
+        macos)
+            local tmp
+            tmp="$(mktemp -t scb.XXXXXX.png)"
+            trap 'rm -f "$tmp"' RETURN
+            pngpaste "$tmp" >/dev/null
+            cat "$tmp"
+            ;;
+        *)
+            die "unknown clipboard backend: $backend"
+            ;;
+    esac
+}
+
+remote_write() {
+    local server=$1
+    local remote_path=$2
+    local remote_script
+
+    # shellcheck disable=SC2016
+    remote_script='
+        set -eu
+        path=$1
+        case "$path" in
+            "~") path=$HOME ;;
+            "~/"*) path=$HOME/${path#"~/"} ;;
+        esac
+        if [ -d "$path" ]; then
+            echo "remote path must include a filename" >&2
+            exit 2
+        fi
+        case "$path" in
+            */) echo "remote path must include a filename" >&2; exit 2 ;;
+            */*) mkdir -p -- "${path%/*}" ;;
+        esac
+        cat > "$path"
+    '
+
+    # shellcheck disable=SC2029
+    ssh "$server" "sh -c $(shell_quote "$remote_script") sh $(shell_quote "$remote_path")"
+}
+
+main() {
+    if [[ ${1:-} == "-h" || ${1:-} == "--help" ]]; then
+        usage
+        exit 0
+    fi
+
+    [[ $# -eq 2 ]] || {
+        usage >&2
+        exit 1
+    }
+
+    local server=$1
+    local remote_path=$2
+    local detected backend mime
+
+    detected="$(detect_backend || true)"
+    [[ -n "$detected" ]] || die "no clipboard image backend found or clipboard does not contain a supported image; use this on your local desktop with wl-paste, xclip, or pngpaste available"
+
+    backend="${detected%%$'\t'*}"
+    mime="${detected#*$'\t'}"
+
+    case "$backend" in
+        wayland)
+            printf 'scb: sending %s via wl-paste to %s:%s\n' "$mime" "$server" "$remote_path" >&2
+            ;;
+        x11)
+            printf 'scb: sending %s via xclip to %s:%s\n' "$mime" "$server" "$remote_path" >&2
+            ;;
+        macos)
+            printf 'scb: sending %s via pngpaste to %s:%s\n' "$mime" "$server" "$remote_path" >&2
+            ;;
+    esac
+
+    stream_clipboard "$backend" "$mime" | remote_write "$server" "$remote_path"
+    printf 'scb: uploaded to %s:%s\n' "$server" "$remote_path" >&2
+}
+
+main "$@"

@@ -13,7 +13,7 @@ cd ~/src/dotfiles
 ./install.sh
 
 # Or manually stow individual packages
-stow -t ~ alacritty fish tmux zellij starship git bash nix claude agents opencode
+stow -t ~ alacritty fish tmux zellij starship git bash localbin nix claude agents opencode
 
 # Optional: private overlay (domain-specific skills/agents)
 # Clone your private dotfiles repo alongside this one:
@@ -79,6 +79,7 @@ rm zellij-x86_64-unknown-linux-musl.tar.gz
 | fish      | ~.config/fish/config.fish~            |
 | opencode  | ~.config/opencode/opencode.json~      |
 | git       | ~.gitconfig~                          |
+| localbin  | ~.local/bin/~ helper scripts         |
 | starship  | ~.config/starship.toml~               |
 | tmux      | ~.tmux.conf~, ~.tmux/~                |
 | zellij    | ~.config/zellij/config.kdl~           |
