@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+# Chain into per-repo hook if it exists.
+GIT_DIR="$(git rev-parse --git-dir 2>/dev/null)"
+if [ -n "$GIT_DIR" ] && [ -x "$GIT_DIR/hooks/post-merge" ]; then
+    "$GIT_DIR/hooks/post-merge" "$@" || exit $?
+fi
+
+# Keep LFS lockable files read-only when git-lfs is available.
+command -v git-lfs >/dev/null 2>&1 && git lfs post-merge "$@"

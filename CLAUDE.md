@@ -37,4 +37,8 @@ Add `claude/.claude/skills/<name>/SKILL.md` with YAML frontmatter (`name`, `desc
 
 ## Private Overlay
 
-`claude-private/` symlinks to `~/src/dotfiles-private/claude-private/` for domain-specific skills not in the public repo. Stow merges it into `~/.claude/`.
+Private stow packages live in `~/src/dotfiles-private/` and are symlinked into this repo when needed. Current overlays:
+
+- `claude-private/` → `~/src/dotfiles-private/claude-private/`
+- `git-private/` → `~/src/dotfiles-private/git-private/`
+- `opencode-private/` → `~/src/dotfiles-private/opencode-private/`

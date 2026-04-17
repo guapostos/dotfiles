@@ -19,6 +19,9 @@ export XDG_CACHE_HOME="$HOME/.cache"
 # === Environment ===
 export EDITOR=vim
 
+# Host-specific shell overrides (not tracked)
+[ -f "$HOME/.config/shell/local.sh" ] && . "$HOME/.config/shell/local.sh"
+
 # === Terminal colors ===
 # Enable true color support for modern terminals (Claude Code, bat, delta, etc.)
 if [[ -z "$COLORTERM" && "$TERM" =~ (256color|alacritty|kitty|tmux|screen) ]]; then

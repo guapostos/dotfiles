@@ -43,6 +43,11 @@ set -gx XDG_CACHE_HOME $HOME/.cache
 set -gx VIRTUALENV_DIR $XDG_STATE_HOME/virtualenvs
 set -gx EDITOR vim
 
+# Host-specific shell overrides (not tracked)
+if test -f "$HOME/.config/fish/local.fish"
+    source "$HOME/.config/fish/local.fish"
+end
+
 # === Terminal colors ===
 # Enable true color support for modern terminals (Claude Code, bat, delta, etc.)
 if test -z "$COLORTERM"; and string match -qr '(256color|alacritty|kitty|tmux|screen)' $TERM

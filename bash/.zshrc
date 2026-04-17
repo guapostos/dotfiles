@@ -12,6 +12,9 @@ path=(
 )
 typeset -U path  # dedupe
 
+# Host-specific shell overrides (not tracked)
+[ -f "$HOME/.config/shell/local.sh" ] && . "$HOME/.config/shell/local.sh"
+
 # mise + starship if running zsh interactively
 if command -v mise &>/dev/null; then
     eval "$(mise activate zsh)"

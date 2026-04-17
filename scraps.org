@@ -1,7 +1,0 @@
-#+TITLE: Scraps
-
-* Scan for expiring domains that are short and in the English dictionary.
-
-#+BEGIN_SRC shell
-curl -o /tmp/deleting-domains.zip https://www.pool.com/Downloads/PoolDeletingDomainsList.zip && unzip -d /tmp /tmp/deleting-domains.zip && cat /tmp/PoolDeletingDomainsList.txt | grep -e '\.com' | awk '{split($0,a,","); print a[1]}' | cut -d '.' -f 1 | grep -x '.\{4,6\}' | grep -v '-' | xargs -I{} bash -c 'if dict -d gcide {} 2>/dev/null; then echo {}; fi' | grep -v '^$'
-#+END_SRC

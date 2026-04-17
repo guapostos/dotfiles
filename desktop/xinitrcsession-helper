@@ -1,2 +1,2 @@
 #!/bin/sh
-exec /home/eihli/.xinitrc $1
+exec "$HOME/.xinitrc" "$1"

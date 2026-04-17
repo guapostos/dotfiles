@@ -107,22 +107,33 @@ if [ ${#manual[@]} -gt 0 ]; then
 fi
 
 # Stow all packages
-for pkg in alacritty claude agents bash fish git localbin nix opencode starship tmux zellij; do
+for pkg in alacritty claude agents bash fish git localbin nix starship tmux zellij; do
     echo "Stowing $pkg..."
     stow -t ~ "$pkg"
 done
 
-# Stow private overlay (domain-specific skills/agents, not in public repo)
-# Uses symlink: claude-private -> ../dotfiles-private/claude-private
-# Stow from same dir enables tree folding (merges into shared ~/.claude/)
-if [ -L claude-private ] && [ -d claude-private ]; then
-    echo "Stowing private overlay..."
-    stow -t ~ claude-private
-else
-    echo "No private overlay found (optional). To add:"
+# Stow private overlays (personal configs not kept in the public repo).
+# Uses symlinks like claude-private -> ../dotfiles-private/claude-private
+# Stow from this repo preserves tree folding into shared ~/.claude/ and ~/.config/.
+private_overlays=(claude-private git-private opencode-private)
+stowed_private=false
+for overlay in "${private_overlays[@]}"; do
+    if [ -L "$overlay" ] && [ -d "$overlay" ]; then
+        echo "Stowing $overlay..."
+        stow -t ~ "$overlay"
+        stowed_private=true
+    fi
+done
+
+if ! $stowed_private; then
+    echo "No private overlays found (optional). To add:"
     echo "  git clone <private-repo> ~/src/dotfiles-private"
     echo "  ln -sfn ../dotfiles-private/claude-private ~/src/dotfiles/claude-private"
+    echo "  ln -sfn ../dotfiles-private/git-private ~/src/dotfiles/git-private"
+    echo "  ln -sfn ../dotfiles-private/opencode-private ~/src/dotfiles/opencode-private"
     echo "  stow -t ~ claude-private"
+    echo "  stow -t ~ git-private"
+    echo "  stow -t ~ opencode-private"
 fi
 
 # Symlink AGENTS.md to CLAUDE.md for Claude Code
