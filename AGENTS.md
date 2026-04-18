@@ -7,6 +7,7 @@ Stow-managed dotfiles for a remote SSH server. Each top-level directory is a sto
 ```text
 agents/     -> ~/.config/AGENTS.md (shared global AI-agent conventions)
 bash/       -> ~/.bashrc, ~/.zshrc (shell fallbacks)
+bin/        -> ~/.local/bin/ (global PATH wrappers for repo-managed CLIs)
 claude/     -> ~/.claude/ (Claude Code settings, skills, hooks)
 fish/       -> ~/.config/fish/ (primary shell)
 git/        -> ~/.config/git/ (git config, delta)
@@ -54,6 +55,7 @@ stow -D -t ~ <package>
 - The canonical OpenCode config file is `opencode/.config/opencode/opencode.json`, which installs to `~/.config/opencode/opencode.json`.
 - Generated OpenCode agent wrappers live in `opencode/.config/opencode/agents/`.
 - Generated Codex plugin agents live in `plugins/plugins/dotfiles-agents/agents/`.
+- Repo-managed PATH wrappers live in `bin/.local/bin/` and install to `~/.local/bin/`.
 - Private Claude skills and agents live in `~/src/dotfiles-private/claude-private/`.
 - Private shared agent and skill sources can live in `~/src/dotfiles-private/agents-private/`.
 - Private OpenCode agent wrappers can live in `~/src/dotfiles-private/opencode-private/`.

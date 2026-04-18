@@ -228,7 +228,7 @@ stow_optional_private_pkg() {
 }
 
 # Stow all packages
-for pkg in age agents bash fish git nix opencode claude plugins starship tmux zellij; do
+for pkg in age agents bash bin fish git nix opencode claude plugins starship tmux zellij; do
     echo "Stowing $pkg..."
     stow --no-folding -t ~ "$pkg"
 
