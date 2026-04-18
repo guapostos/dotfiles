@@ -18,6 +18,10 @@ link_shared_doc() {
         return
     fi
 
+    if [ -L "$target" ] && [ "$(readlink -f -- "$target" 2>/dev/null)" = "$(readlink -f -- "$source" 2>/dev/null)" ]; then
+        return
+    fi
+
     ln -sfn "$source" "$target"
     echo "Linked $target -> $source"
 }
@@ -28,7 +32,22 @@ link_shared_dir() {
 
     mkdir -p "$(dirname "$target")"
 
-    if [ -L "$target" ] || [ ! -e "$target" ]; then
+    if [ -L "$target" ]; then
+        # If the existing symlink already resolves to the same final target,
+        # leave it alone. This preserves stow-owned chains (e.g. private
+        # overlay pointing through the shared tree) and keeps install.sh
+        # idempotent.
+        existing="$(readlink -f -- "$target" 2>/dev/null || true)"
+        desired="$(readlink -f -- "$source" 2>/dev/null || true)"
+        if [ -n "$desired" ] && [ "$existing" = "$desired" ]; then
+            return
+        fi
+        ln -sfn "$source" "$target"
+        echo "Linked $target -> $source"
+        return
+    fi
+
+    if [ ! -e "$target" ]; then
         ln -sfn "$source" "$target"
         echo "Linked $target -> $source"
         return
