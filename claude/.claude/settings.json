@@ -131,6 +131,6 @@
     "swift-lsp@claude-plugins-official": false,
     "superpowers@claude-plugins-official": false
   },
-  "effortLevel": "high",
-  "skipDangerousModePermissionPrompt": true
+  "skipDangerousModePermissionPrompt": true,
+  "model": "claude-opus-4-7"
 }
