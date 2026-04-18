@@ -205,28 +205,6 @@ if [ ${#manual[@]} -gt 0 ]; then
     echo ""
 fi
 
-ensure_private_pkg_symlink() {
-    local name="$1"
-
-    if [ ! -e "$name" ] && [ -d "../dotfiles-private/$name" ]; then
-        ln -sfn "../dotfiles-private/$name" "$name"
-        echo "Linked local private package symlink: $name"
-    fi
-}
-
-stow_optional_private_pkg() {
-    local name="$1"
-    ensure_private_pkg_symlink "$name"
-
-    if [ -L "$name" ] && [ -d "$name" ]; then
-        echo "Stowing private package: $name"
-        stow -t ~ "$name"
-        return
-    fi
-
-    echo "No private package found for $name (optional)."
-}
-
 # Stow all packages
 for pkg in age agents bash bin fish git nix opencode claude plugins starship tmux zellij; do
     echo "Stowing $pkg..."
@@ -242,10 +220,9 @@ for pkg in age agents bash bin fish git nix opencode claude plugins starship tmu
     fi
 done
 
-# Stow private overlays (domain-specific skills/agents not in the public repo).
-for pkg in agents-private claude-private opencode-private; do
-    stow_optional_private_pkg "$pkg"
-done
+# Private overlay (domain-specific skills, CLIs, and configs) has its own
+# install.sh in ~/src/dotfiles-private. It stows as a peer — run it after
+# this one if you want the private packages installed.
 
 # Link shared AGENTS.md into tools that natively read AGENTS.md
 SHARED_AGENTS="$HOME/.config/AGENTS.md"

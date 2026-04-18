@@ -7,11 +7,6 @@ __pycache__/
 # Local overrides for claude settings (not tracked)
 settings.local.json
 
-# Private overlay symlink (points to ../dotfiles-private/claude-private)
-claude-private
-agents-private
-opencode-private
-
 # Fish auto-generated
 fish_variables
 

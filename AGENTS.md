@@ -12,7 +12,7 @@ claude/     -> ~/.claude/ (Claude Code settings, skills, hooks)
 fish/       -> ~/.config/fish/ (primary shell)
 git/        -> ~/.config/git/ (git config, delta)
 nix/        -> ~/.config/nix/ (nix config)
-opencode/   -> ~/.config/opencode/ (OpenCode config and generated agent wrappers)
+opencode/   -> ~/.config/opencode/ (OpenCode generated agent wrappers)
 plugins/    -> ~/plugins/ (Codex plugin surfaces)
 starship/   -> ~/.config/starship.toml (prompt)
 tmux/       -> ~/.config/tmux/ (terminal multiplexer)
@@ -29,35 +29,32 @@ stow -t ~ <package>
 stow -D -t ~ <package>
 ```
 
+## Scope
+
+This repo holds tool configuration and domain-neutral AI infrastructure — shells, terminal, git, nix, general workflow skills (checkpoint, next, research, session-notes, skill-creator, multi-mind) and generic engineering agents (debug, reviewer-*, code-simplifier, verify-app, logalyzer).
+
+Work/domain-specific material (finance/markets tooling, project-specific skills, secrets) lives in a peer repo at `~/src/dotfiles-private` with its own `install.sh`. Run both installers if you want the full environment.
+
 ## AI Config
 
 - Shared global conventions live in `~/.config/AGENTS.md`.
 - Claude-specific global additions live in `~/.claude/CLAUDE.md`.
 - This repo-level `AGENTS.md` is the shared project instructions file for tools that support `AGENTS.md`.
 - `CLAUDE.md` in this repo imports this file so Claude Code reads the same project instructions.
-- Portable shared agents live in `~/.agents/agents/` at the source level and render into tool-native wrappers.
+- Portable shared agents live in `~/.agents/agents/` and render into tool-native wrappers.
 - Portable shared skills live in `~/.agents/skills/`.
-- Tool-native skill links point to the shared skill directory for the migrated portable skills.
-- The canonical Codex plugin registry is `agents/.agents/plugins/marketplace.json`; add future local plugins there rather than editing `~/.agents/plugins/marketplace.json` by hand.
+- The canonical Codex plugin registry is `agents/.agents/plugins/marketplace.json`.
 
 ## Canonical Sources
 
 - Edit canonical sources, not generated wrappers.
-- Source-of-truth portable agents live in `agents/.agents/agents/`.
-- Source-of-truth portable skills live in `agents/.agents/skills/`.
+- Portable agents: `agents/.agents/agents/`
+- Portable skills: `agents/.agents/skills/`
+- Claude-only skills: `claude/.claude/skills/`
 - Do not hand-edit generated wrappers under `opencode/.config/opencode/agents/` or `plugins/plugins/dotfiles-agents/agents/`; they are rendered by `scripts/render-agent-surfaces.py` and refreshed by `./install.sh`.
 
-## Skills And Private Overlay
+## Skill Install Pipeline
 
-- Portable cross-tool agent sources live in `agents/.agents/agents/`.
-- Portable cross-tool skills live in `agents/.agents/skills/`.
-- Claude-only skills remain in `claude/.claude/skills/`.
-- The canonical OpenCode config file is `opencode/.config/opencode/opencode.json`, which installs to `~/.config/opencode/opencode.json`.
-- Generated OpenCode agent wrappers live in `opencode/.config/opencode/agents/`.
-- Generated Codex plugin agents live in `plugins/plugins/dotfiles-agents/agents/`.
+- `install.sh` stows `agents` with `--no-folding` so `~/.agents/` stays a real dir (prevents stray writes from leaking into this repo — see commit `ab70eca`), then refolds each `~/.agents/skills/<name>/` into a directory symlink so `SKILL.md` is a real file at the end of the chain (required by Codex's skill loader).
+- Each skill under `~/.agents/skills/` is then linked into `~/.claude/skills/`, `~/.codex/skills/`, and `~/.config/opencode/skills/`.
 - Repo-managed PATH wrappers live in `bin/.local/bin/` and install to `~/.local/bin/`.
-- Private Claude skills and agents live in `~/src/dotfiles-private/claude-private/`.
-- Private shared agent and skill sources can live in `~/src/dotfiles-private/agents-private/`.
-- Private OpenCode agent wrappers can live in `~/src/dotfiles-private/opencode-private/`.
-- The local gitignored `claude-private -> ../dotfiles-private/claude-private` symlink lets `stow` merge the private overlay into `~/.claude/`.
-- `install.sh` keeps `~/.opencode/opencode.json` as a compatibility symlink back to `~/.config/opencode/opencode.json` when the legacy file matches the managed config.
