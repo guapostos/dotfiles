@@ -170,7 +170,11 @@ When triggered: step back, ask what's the smallest useful piece, simplify ruthle
 ## Critical Thinking
 
 - Fix root cause (not band-aid)
-- **Chesterton's Fence**: Before deleting or changing something, understand why it was added and why that reason no longer applies. If unsure, ask or take the safer path.
+- **Chesterton's Fence (operational)**: Before proposing to change, remove, bypass, or invert any existing code, config, flag, or convention, first find out *why* it's there. Do this *before* the suggestion leaves your mouth, not after the user pushes back. Minimum steps:
+  1. `git log -S "<token>" -- <path>` and/or `git blame` on the line
+  2. Read the introducing commit message and diff
+  3. Check nearby docs/comments for stated intent
+  If the reason is still unclear, ask — don't guess. A suggestion that regresses a prior fix is worse than a question. When you do propose the change, state the original reason and why it no longer applies (or why the tradeoff is now worth it).
 - Unsure: read more code; if still stuck, ask w/ short options
 - Conflicts: call out; pick safer path
 - Leave breadcrumb notes in thread

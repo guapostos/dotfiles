@@ -263,6 +263,41 @@ if [ -f "$SHARED_AGENTS" ]; then
 fi
 
 SHARED_SKILLS_ROOT="$HOME/.agents/skills"
+
+# Refold public-repo skills at the leaf level. We stow `agents` with
+# --no-folding to keep ~/.agents/ itself a real directory (so stray writes
+# don't leak into the repo — see ab70eca). But that leaves each
+# ~/.agents/skills/<name>/ as a real dir with symlinked leaves, which means
+# SKILL.md ends up a symlink. Codex's skill loader (rust-v0.80.0 / PR #8801)
+# is supposed to follow symlinked SKILL.md files, but in practice skills
+# discovered that way don't show up in `/skills`. Collapsing each skill
+# subdir into a single directory symlink gives every consumer (Codex,
+# Claude Code, OpenCode) a real SKILL.md at the far end of the chain.
+#
+# Safe because LLM tooling treats skill dirs as read-only; nothing writes
+# cache/state next to SKILL.md.
+PUBLIC_SKILLS_SRC="$(pwd)/agents/.agents/skills"
+if [ -d "$PUBLIC_SKILLS_SRC" ] && [ -d "$SHARED_SKILLS_ROOT" ]; then
+    for src in "$PUBLIC_SKILLS_SRC"/*/; do
+        [ -d "$src" ] || continue
+        name="$(basename "$src")"
+        leaf="$SHARED_SKILLS_ROOT/$name"
+        src_canon="$(readlink -f -- "$src")"
+
+        if [ -L "$leaf" ]; then
+            if [ "$(readlink -f -- "$leaf")" = "$src_canon" ]; then
+                continue
+            fi
+            rm -f "$leaf"
+        elif [ -d "$leaf" ]; then
+            rm -rf "$leaf"
+        fi
+
+        ln -sfn "$src_canon" "$leaf"
+        echo "Refolded $leaf -> $src_canon"
+    done
+fi
+
 if [ -d "$SHARED_SKILLS_ROOT" ]; then
     for skill_dir in "$SHARED_SKILLS_ROOT"/*; do
         [ -d "$skill_dir" ] || continue
