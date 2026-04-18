@@ -205,8 +205,22 @@ if [ ${#manual[@]} -gt 0 ]; then
     echo ""
 fi
 
+# Clear refolded skill leaves before re-stowing `agents`. The post-stow
+# refold step below replaces stow's per-file symlinks with directory
+# symlinks, which stow then treats as foreign on a subsequent run. Removing
+# them lets stow re-stow cleanly.
+if [ -d "$HOME/.agents/skills" ]; then
+    for leaf in "$HOME/.agents/skills"/*; do
+        [ -L "$leaf" ] || continue
+        target="$(readlink -f -- "$leaf" 2>/dev/null || true)"
+        case "$target" in
+            "$(pwd)"/agents/.agents/skills/*) rm -f "$leaf" ;;
+        esac
+    done
+fi
+
 # Stow all packages
-for pkg in age agents bash bin fish git nix opencode claude plugins starship tmux zellij; do
+for pkg in age agents bash fish git nix opencode claude plugins starship tmux zellij; do
     echo "Stowing $pkg..."
     stow --no-folding -t ~ "$pkg"
 

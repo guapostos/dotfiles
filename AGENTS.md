@@ -7,7 +7,6 @@ Stow-managed dotfiles for a remote SSH server. Each top-level directory is a sto
 ```text
 agents/     -> ~/.config/AGENTS.md (shared global AI-agent conventions)
 bash/       -> ~/.bashrc, ~/.zshrc (shell fallbacks)
-bin/        -> ~/.local/bin/ (global PATH wrappers for repo-managed CLIs)
 claude/     -> ~/.claude/ (Claude Code settings, skills, hooks)
 fish/       -> ~/.config/fish/ (primary shell)
 git/        -> ~/.config/git/ (git config, delta)
@@ -57,4 +56,3 @@ Work/domain-specific material (finance/markets tooling, project-specific skills,
 
 - `install.sh` stows `agents` with `--no-folding` so `~/.agents/` stays a real dir (prevents stray writes from leaking into this repo — see commit `ab70eca`), then refolds each `~/.agents/skills/<name>/` into a directory symlink so `SKILL.md` is a real file at the end of the chain (required by Codex's skill loader).
 - Each skill under `~/.agents/skills/` is then linked into `~/.claude/skills/`, `~/.codex/skills/`, and `~/.config/opencode/skills/`.
-- Repo-managed PATH wrappers live in `bin/.local/bin/` and install to `~/.local/bin/`.
