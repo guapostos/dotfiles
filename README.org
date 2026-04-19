@@ -9,7 +9,7 @@ Managed with [[https://www.gnu.org/software/stow/][GNU Stow]]. Each directory is
 git clone git@github.com:eihli/dotfiles.git ~/src/dotfiles
 cd ~/src/dotfiles
 
-# Install (Debian/Ubuntu)
+# Install (auto-detects port/pacman/apt/brew)
 ./install.sh
 
 # Or manually stow individual packages
@@ -40,6 +40,13 @@ stow -t ~ alacritty fish tmux zellij starship git bash localbin nix claude agent
 
 #+begin_src sh
 sudo port install fish starship fzf fd mise git-delta zellij tmux
+#+end_src
+
+*** Arch Linux (pacman)
+
+#+begin_src sh
+sudo pacman -S --needed stow fish starship git-delta mise fzf fd \
+    zoxide bat tmux git-lfs jq usage zellij
 #+end_src
 
 *** Ubuntu/Debian
@@ -182,12 +189,10 @@ EndSection
 
 *** Arch Linux Base Packages
 
-#+begin_src sh
-sudo pacman -Syu fish git emacs ripgrep tmux \
-    base-devel xclip cmake git-lfs docker
+Additional system packages beyond what ~install.sh~ handles:
 
-# AUR
-yay -Syu starship-bin
+#+begin_src sh
+sudo pacman -S --needed git emacs ripgrep base-devel xclip cmake docker
 #+end_src
 
 *** Useful Apps

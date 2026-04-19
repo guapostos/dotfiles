@@ -9,6 +9,9 @@ cd "$(dirname "$0")"
 if command -v port &> /dev/null; then
     PM=port
     PM_INSTALL="sudo port install"
+elif command -v pacman &> /dev/null; then
+    PM=pacman
+    PM_INSTALL="sudo pacman -S --needed"
 elif command -v apt &> /dev/null; then
     PM=apt
     PM_INSTALL="sudo apt install -y"
@@ -16,28 +19,29 @@ elif command -v brew &> /dev/null; then
     PM=brew
     PM_INSTALL="brew install"
 else
-    echo "No supported package manager found (port, apt, brew)"
+    echo "No supported package manager found (port, pacman, apt, brew)"
     exit 1
 fi
 
 # Tools required by dotfiles configs
-# Format: "command:apt_pkg:port_pkg:brew_pkg"
+# Format: "command:apt_pkg:port_pkg:brew_pkg:pacman_pkg"
 # Use - to skip a package manager (tool not available there)
 # Use cmd1|cmd2 to check alternate binary names (e.g. Debian's fdfind/batcat)
 DEPS=(
-    "stow:stow:stow:stow"
-    "fish:fish:fish:fish"
-    "starship:-:starship:starship"
-    "delta:-:git-delta:git-delta"
-    "mise:-:mise:mise"
-    "fzf:fzf:fzf:fzf"
-    "fd|fdfind:fd-find:fd:fd"
-    "zoxide:zoxide:zoxide:zoxide"
-    "bat|batcat:bat:bat:bat"
-    "tmux:tmux:tmux:tmux"
-    "git-lfs:git-lfs:git-lfs:git-lfs"
-    "terminal-notifier:-:terminal-notifier:terminal-notifier"
-    "usage:-:-:usage"
+    "stow:stow:stow:stow:stow"
+    "fish:fish:fish:fish:fish"
+    "starship:-:starship:starship:starship"
+    "delta:-:git-delta:git-delta:git-delta"
+    "mise:-:mise:mise:mise"
+    "fzf:fzf:fzf:fzf:fzf"
+    "fd|fdfind:fd-find:fd:fd:fd"
+    "zoxide:zoxide:zoxide:zoxide:zoxide"
+    "bat|batcat:bat:bat:bat:bat"
+    "tmux:tmux:tmux:tmux:tmux"
+    "git-lfs:git-lfs:git-lfs:git-lfs:git-lfs"
+    "jq:jq:jq:jq:jq"
+    "terminal-notifier:-:terminal-notifier:terminal-notifier:-"
+    "usage:-:-:usage:usage"
 )
 
 # Check which tools are missing
@@ -45,7 +49,7 @@ missing=()
 missing_pkgs=()
 manual=()
 for dep in "${DEPS[@]}"; do
-    IFS=: read -r cmd apt_pkg port_pkg brew_pkg <<< "$dep"
+    IFS=: read -r cmd apt_pkg port_pkg brew_pkg pacman_pkg <<< "$dep"
     # Check all alternate names (pipe-separated)
     found=false
     for alt in ${cmd//|/ }; do
@@ -53,9 +57,10 @@ for dep in "${DEPS[@]}"; do
     done
     if ! $found; then
         case $PM in
-            apt)  pkg=$apt_pkg ;;
-            port) pkg=$port_pkg ;;
-            brew) pkg=$brew_pkg ;;
+            apt)    pkg=$apt_pkg ;;
+            port)   pkg=$port_pkg ;;
+            brew)   pkg=$brew_pkg ;;
+            pacman) pkg=$pacman_pkg ;;
         esac
         if [ "$pkg" != "-" ]; then
             missing+=("${cmd%%|*}")
