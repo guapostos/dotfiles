@@ -170,6 +170,9 @@ When triggered: step back, ask what's the smallest useful piece, simplify ruthle
 ## Critical Thinking
 
 - Fix root cause (not band-aid)
+- Prefer robustness for external/uncontrolled inputs.
+- For stale internal artifacts created by our own code: understand why they exist first. If they are low-value and easily regenerated, prefer deleting or regenerating them over compatibility shims or one-off conditionals.
+- Never delete data or artifacts without explicit user approval, even if they look stale, low-value, replaceable, or internally generated.
 - **Chesterton's Fence (operational)**: Before proposing to change, remove, bypass, or invert any existing code, config, flag, or convention, first find out *why* it's there. Do this *before* the suggestion leaves your mouth, not after the user pushes back. Minimum steps:
   1. `git log -S "<token>" -- <path>` and/or `git blame` on the line
   2. Read the introducing commit message and diff
