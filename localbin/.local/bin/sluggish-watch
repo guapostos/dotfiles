@@ -1,0 +1,1560 @@
+#!/usr/bin/env python3
+"""Capture broad Linux performance snapshots to diagnose intermittent sluggishness.
+
+The recorder keeps overhead low by reading from /proc and /sys directly. It logs
+structured JSON lines during a capture run and can summarize the resulting
+session into a short text report.
+"""
+
+from __future__ import annotations
+
+import argparse
+import collections
+import datetime as dt
+import json
+import math
+import os
+import pathlib
+import platform
+import re
+import shutil
+import socket
+import statistics
+import subprocess
+import sys
+import time
+from typing import Any
+
+VERSION = "0.1.0"
+DEFAULT_INTERVAL = "10s"
+DEFAULT_DURATION = "6h"
+DEFAULT_BURST_INTERVAL = "1s"
+DEFAULT_BURST_COUNT = 10
+DEFAULT_TOP_N = 8
+DEFAULT_STATE_ROOT = pathlib.Path.home() / ".local" / "state" / "sluggish-watch"
+PRESSURE_FILES = ("cpu", "memory", "io")
+VMSTAT_KEYS = (
+    "pgmajfault",
+    "pswpin",
+    "pswpout",
+    "oom_kill",
+    "allocstall",
+    "allocstall_dma",
+    "allocstall_dma32",
+    "allocstall_normal",
+    "compact_stall",
+    "compact_fail",
+    "compact_success",
+    "pgscan_direct",
+    "pgscan_kswapd",
+    "pgsteal_direct",
+    "pgsteal_kswapd",
+    "workingset_refault",
+    "nr_dirty",
+    "nr_writeback",
+)
+ALERT_WEIGHTS = {
+    "blocked_tasks": 5,
+    "d_state": 5,
+    "low_mem_available": 5,
+    "memory_pressure": 5,
+    "major_faults": 4,
+    "swap_activity": 4,
+    "high_iowait": 4,
+    "io_pressure": 4,
+    "disk_busy": 4,
+    "thermal_throttle": 4,
+    "run_queue": 3,
+    "high_load": 3,
+    "cpu_saturation": 3,
+    "gpu_busy": 2,
+}
+SUSPICIOUS_KERNEL_RE = re.compile(
+    r"(error|fail|warn|hung|blocked|reset|timeout|throttl|oom|xid|drm|i915|amdgpu|"
+    r"nvidia|nvme|ata|ext4|btrfs|xfs|i/o error)",
+    re.IGNORECASE,
+)
+
+
+def fatal(message: str) -> None:
+    print(f"sluggish-watch: {message}", file=sys.stderr)
+    raise SystemExit(1)
+
+
+def round_float(value: float | None, digits: int = 2) -> float | None:
+    if value is None:
+        return None
+    if math.isnan(value) or math.isinf(value):
+        return None
+    return round(value, digits)
+
+
+def utc_now() -> dt.datetime:
+    return dt.datetime.now(dt.timezone.utc)
+
+
+def local_iso(ts: dt.datetime | None = None) -> str:
+    timestamp = ts or utc_now()
+    return timestamp.astimezone().isoformat(timespec="seconds")
+
+
+def human_bytes(value: float | int | None) -> str:
+    if value is None:
+        return "n/a"
+    size = float(value)
+    units = ["B", "KiB", "MiB", "GiB", "TiB", "PiB"]
+    for unit in units:
+        if abs(size) < 1024.0 or unit == units[-1]:
+            if unit == "B":
+                return f"{int(size)} {unit}"
+            return f"{size:.1f} {unit}"
+        size /= 1024.0
+    return f"{size:.1f} PiB"
+
+
+def human_duration(seconds: float | None) -> str:
+    if seconds is None:
+        return "n/a"
+    seconds = max(0.0, float(seconds))
+    if seconds < 1:
+        return f"{seconds:.2f}s"
+    parts: list[str] = []
+    remaining = int(round(seconds))
+    for unit, size in (("d", 86400), ("h", 3600), ("m", 60), ("s", 1)):
+        if remaining >= size or (unit == "s" and not parts):
+            count, remaining = divmod(remaining, size)
+            if count or unit == "s":
+                parts.append(f"{count}{unit}")
+    return " ".join(parts)
+
+
+def parse_duration(text: str) -> float:
+    value = text.strip().lower()
+    if not value:
+        raise argparse.ArgumentTypeError("duration cannot be empty")
+    if re.fullmatch(r"\d+(\.\d+)?", value):
+        return float(value)
+
+    total = 0.0
+    consumed = 0
+    for match in re.finditer(r"(\d+(?:\.\d+)?)([smhd])", value):
+        amount = float(match.group(1))
+        unit = match.group(2)
+        consumed += len(match.group(0))
+        if unit == "s":
+            total += amount
+        elif unit == "m":
+            total += amount * 60
+        elif unit == "h":
+            total += amount * 3600
+        elif unit == "d":
+            total += amount * 86400
+    if consumed != len(value) or total <= 0:
+        raise argparse.ArgumentTypeError(
+            "duration must look like 45s, 5m, 2h, 1d, or a plain second count"
+        )
+    return total
+
+
+def ensure_empty_dir(path: pathlib.Path) -> None:
+    if path.exists():
+        if any(path.iterdir()):
+            fatal(f"output directory already exists and is not empty: {path}")
+        return
+    path.mkdir(parents=True, exist_ok=False)
+
+
+def read_text(path: pathlib.Path) -> str | None:
+    try:
+        return path.read_text(encoding="utf-8", errors="replace")
+    except (FileNotFoundError, PermissionError, ProcessLookupError, OSError):
+        return None
+
+
+def read_int(path: pathlib.Path) -> int | None:
+    raw = read_text(path)
+    if raw is None:
+        return None
+    try:
+        return int(raw.strip())
+    except ValueError:
+        return None
+
+
+def write_json(path: pathlib.Path, payload: Any) -> None:
+    path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+
+def append_jsonl(path: pathlib.Path, payload: Any) -> None:
+    with path.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(payload, sort_keys=True) + "\n")
+
+
+def load_jsonl(path: pathlib.Path) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    if not path.exists():
+        fatal(f"missing JSONL file: {path}")
+    with path.open(encoding="utf-8") as handle:
+        for line in handle:
+            line = line.strip()
+            if line:
+                rows.append(json.loads(line))
+    return rows
+
+
+def parse_os_release() -> dict[str, str]:
+    path = pathlib.Path("/etc/os-release")
+    data: dict[str, str] = {}
+    raw = read_text(path)
+    if not raw:
+        return data
+    for line in raw.splitlines():
+        if "=" not in line or line.startswith("#"):
+            continue
+        key, value = line.split("=", 1)
+        data[key] = value.strip().strip('"')
+    return data
+
+
+def build_session_dir(explicit_path: str | None) -> pathlib.Path:
+    if explicit_path:
+        return pathlib.Path(explicit_path).expanduser().resolve()
+    stamp = utc_now().astimezone().strftime("%Y%m%d-%H%M%S")
+    return (DEFAULT_STATE_ROOT / stamp).resolve()
+
+
+def parse_proc_stat() -> dict[str, Any]:
+    cpu_fields: list[int] | None = None
+    ctxt = processes = procs_running = procs_blocked = None
+    raw = read_text(pathlib.Path("/proc/stat"))
+    if not raw:
+        return {}
+    for line in raw.splitlines():
+        if line.startswith("cpu "):
+            cpu_fields = [int(part) for part in line.split()[1:]]
+        elif line.startswith("ctxt "):
+            ctxt = int(line.split()[1])
+        elif line.startswith("processes "):
+            processes = int(line.split()[1])
+        elif line.startswith("procs_running "):
+            procs_running = int(line.split()[1])
+        elif line.startswith("procs_blocked "):
+            procs_blocked = int(line.split()[1])
+    return {
+        "cpu_fields": cpu_fields,
+        "ctxt": ctxt,
+        "processes": processes,
+        "procs_running": procs_running,
+        "procs_blocked": procs_blocked,
+    }
+
+
+def parse_meminfo() -> dict[str, int]:
+    wanted = {
+        "MemTotal",
+        "MemFree",
+        "MemAvailable",
+        "Buffers",
+        "Cached",
+        "SwapTotal",
+        "SwapFree",
+        "Dirty",
+        "Writeback",
+        "Shmem",
+        "AnonPages",
+        "Mapped",
+        "Slab",
+        "SReclaimable",
+        "KernelStack",
+        "PageTables",
+    }
+    results: dict[str, int] = {}
+    raw = read_text(pathlib.Path("/proc/meminfo"))
+    if not raw:
+        return results
+    for line in raw.splitlines():
+        key, rest = line.split(":", 1)
+        if key not in wanted:
+            continue
+        parts = rest.strip().split()
+        if not parts:
+            continue
+        value = int(parts[0])
+        unit = parts[1] if len(parts) > 1 else ""
+        results[key] = value * 1024 if unit == "kB" else value
+    return results
+
+
+def parse_vmstat() -> dict[str, int]:
+    values: dict[str, int] = {}
+    raw = read_text(pathlib.Path("/proc/vmstat"))
+    if not raw:
+        return values
+    for line in raw.splitlines():
+        key, value = line.split()
+        if key in VMSTAT_KEYS:
+            values[key] = int(value)
+    return values
+
+
+def parse_pressure() -> dict[str, dict[str, dict[str, float | int]]]:
+    results: dict[str, dict[str, dict[str, float | int]]] = {}
+    for resource in PRESSURE_FILES:
+        resource_data: dict[str, dict[str, float | int]] = {}
+        raw = read_text(pathlib.Path("/proc/pressure") / resource)
+        if not raw:
+            continue
+        for line in raw.splitlines():
+            parts = line.split()
+            scope = parts[0]
+            values: dict[str, float | int] = {}
+            for item in parts[1:]:
+                key, raw_value = item.split("=", 1)
+                if key == "total":
+                    values[key] = int(raw_value)
+                else:
+                    values[key] = float(raw_value)
+            resource_data[scope] = values
+        results[resource] = resource_data
+    return results
+
+
+def parse_loadavg() -> dict[str, float | int]:
+    raw = read_text(pathlib.Path("/proc/loadavg"))
+    if not raw:
+        return {}
+    parts = raw.split()
+    running, total = parts[3].split("/")
+    return {
+        "one": round_float(float(parts[0])),
+        "five": round_float(float(parts[1])),
+        "fifteen": round_float(float(parts[2])),
+        "runnable": int(running),
+        "entities": int(total),
+        "last_pid": int(parts[4]),
+    }
+
+
+def parse_netdev() -> dict[str, dict[str, int]]:
+    raw = read_text(pathlib.Path("/proc/net/dev"))
+    stats: dict[str, dict[str, int]] = {}
+    if not raw:
+        return stats
+    for line in raw.splitlines()[2:]:
+        if ":" not in line:
+            continue
+        iface, rest = line.split(":", 1)
+        iface = iface.strip()
+        if iface == "lo":
+            continue
+        fields = rest.split()
+        if len(fields) < 16:
+            continue
+        stats[iface] = {
+            "rx_bytes": int(fields[0]),
+            "rx_packets": int(fields[1]),
+            "tx_bytes": int(fields[8]),
+            "tx_packets": int(fields[9]),
+        }
+    return stats
+
+
+class Sampler:
+    def __init__(self, top_n: int, with_gpu: bool = True) -> None:
+        self.top_n = top_n
+        self.with_gpu = with_gpu
+        self.page_size = os.sysconf("SC_PAGE_SIZE")
+        self.clk_tck = os.sysconf("SC_CLK_TCK")
+        self.cpu_count = os.cpu_count() or 1
+        self.prev_at: float | None = None
+        self.prev_proc_stat: dict[str, Any] | None = None
+        self.prev_vmstat: dict[str, int] | None = None
+        self.prev_pressure: dict[str, dict[str, dict[str, float | int]]] | None = None
+        self.prev_diskstats: dict[str, dict[str, int]] | None = None
+        self.prev_netdev: dict[str, dict[str, int]] | None = None
+        self.prev_processes: dict[tuple[int, int], dict[str, Any]] = {}
+        self.block_devices = self._discover_block_devices()
+        self.cpu_freq_paths = sorted(
+            pathlib.Path("/sys/devices/system/cpu").glob("cpu[0-9]*/cpufreq/scaling_cur_freq")
+        )
+        self.cpu_max_freq_paths = {
+            str(path): path.with_name("cpuinfo_max_freq") for path in self.cpu_freq_paths
+        }
+        self.thermal_zones = sorted(pathlib.Path("/sys/class/thermal").glob("thermal_zone*"))
+        self.nvidia_smi = shutil.which("nvidia-smi") if with_gpu else None
+        self.nvidia_failed = False
+
+    def _discover_block_devices(self) -> dict[str, int]:
+        devices: dict[str, int] = {}
+        sys_block = pathlib.Path("/sys/block")
+        if not sys_block.exists():
+            return devices
+        for device in sys_block.iterdir():
+            name = device.name
+            if name.startswith(("loop", "ram")):
+                continue
+            sector_size = read_int(device / "queue" / "logical_block_size") or 512
+            devices[name] = sector_size
+        return devices
+
+    def _parse_diskstats(self) -> dict[str, dict[str, int]]:
+        raw = read_text(pathlib.Path("/proc/diskstats"))
+        stats: dict[str, dict[str, int]] = {}
+        if not raw:
+            return stats
+        for line in raw.splitlines():
+            parts = line.split()
+            if len(parts) < 14:
+                continue
+            name = parts[2]
+            if name not in self.block_devices:
+                continue
+            stats[name] = {
+                "reads_completed": int(parts[3]),
+                "reads_merged": int(parts[4]),
+                "sectors_read": int(parts[5]),
+                "read_ms": int(parts[6]),
+                "writes_completed": int(parts[7]),
+                "writes_merged": int(parts[8]),
+                "sectors_written": int(parts[9]),
+                "write_ms": int(parts[10]),
+                "io_in_progress": int(parts[11]),
+                "io_ms": int(parts[12]),
+                "weighted_io_ms": int(parts[13]),
+            }
+        return stats
+
+    def _parse_cpu_freq(self) -> dict[str, Any] | None:
+        if not self.cpu_freq_paths:
+            return None
+        current_values = [read_int(path) for path in self.cpu_freq_paths]
+        current_values = [value for value in current_values if value]
+        if not current_values:
+            return None
+        max_values = [
+            read_int(self.cpu_max_freq_paths[str(path)]) for path in self.cpu_freq_paths
+        ]
+        max_values = [value for value in max_values if value]
+        avg_mhz = statistics.fmean(current_values) / 1000.0
+        peak_mhz = max(current_values) / 1000.0
+        result = {
+            "avg_mhz": round_float(avg_mhz),
+            "peak_mhz": round_float(peak_mhz),
+        }
+        if max_values:
+            avg_max_mhz = statistics.fmean(max_values) / 1000.0
+            result["avg_max_mhz"] = round_float(avg_max_mhz)
+            if avg_max_mhz > 0:
+                result["pct_of_max"] = round_float(avg_mhz * 100.0 / avg_max_mhz)
+        return result
+
+    def _parse_thermal(self) -> dict[str, Any] | None:
+        hottest: list[dict[str, Any]] = []
+        for zone in self.thermal_zones:
+            temp_raw = read_int(zone / "temp")
+            zone_type = (read_text(zone / "type") or zone.name).strip()
+            if temp_raw is None or temp_raw <= 0:
+                continue
+            temp_c = temp_raw / 1000.0 if temp_raw > 1000 else float(temp_raw)
+            if temp_c > 150:
+                continue
+            hottest.append({"zone": zone_type, "temp_c": round_float(temp_c)})
+        if not hottest:
+            return None
+        hottest.sort(key=lambda item: item["temp_c"] or 0.0, reverse=True)
+        return {
+            "max_temp_c": hottest[0]["temp_c"],
+            "zones": hottest[:5],
+            "cpu_freq": self._parse_cpu_freq(),
+        }
+
+    def _parse_nvidia(self) -> dict[str, Any] | None:
+        if not self.nvidia_smi or self.nvidia_failed:
+            return None
+        cmd = [
+            self.nvidia_smi,
+            "--query-gpu=index,name,utilization.gpu,utilization.memory,memory.used,memory.total,"
+            "temperature.gpu,pstate,clocks.sm,power.draw,power.limit",
+            "--format=csv,noheader,nounits",
+        ]
+        try:
+            proc = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=1.5,
+                check=False,
+            )
+        except (OSError, subprocess.SubprocessError):
+            self.nvidia_failed = True
+            return None
+        if proc.returncode != 0:
+            self.nvidia_failed = True
+            return None
+        gpus: list[dict[str, Any]] = []
+        for line in proc.stdout.splitlines():
+            parts = [part.strip() for part in line.split(",")]
+            if len(parts) != 11:
+                continue
+            power_draw = float(parts[9]) if parts[9] not in {"N/A", "[N/A]"} else None
+            power_limit = float(parts[10]) if parts[10] not in {"N/A", "[N/A]"} else None
+            entry = {
+                "index": int(parts[0]),
+                "name": parts[1],
+                "utilization_pct": round_float(float(parts[2])),
+                "memory_utilization_pct": round_float(float(parts[3])),
+                "memory_used_mb": round_float(float(parts[4])),
+                "memory_total_mb": round_float(float(parts[5])),
+                "temperature_c": round_float(float(parts[6])),
+                "pstate": parts[7],
+                "sm_clock_mhz": round_float(float(parts[8])),
+                "power_draw_w": round_float(power_draw),
+            }
+            if power_limit is not None:
+                entry["power_limit_w"] = round_float(power_limit)
+            gpus.append(entry)
+        if not gpus:
+            return None
+        return {"gpus": gpus}
+
+    def _parse_process_stat(self, text: str) -> dict[str, Any] | None:
+        left = text.find("(")
+        right = text.rfind(")")
+        if left == -1 or right == -1 or right <= left:
+            return None
+        prefix = text[:left].strip().split()
+        if not prefix:
+            return None
+        rest = text[right + 2 :].split()
+        if len(rest) < 22:
+            return None
+        return {
+            "pid": int(prefix[0]),
+            "comm": text[left + 1 : right],
+            "state": rest[0],
+            "majflt": int(rest[9]),
+            "utime": int(rest[11]),
+            "stime": int(rest[12]),
+            "num_threads": int(rest[17]),
+            "starttime": int(rest[19]),
+            "vsize": int(rest[20]),
+            "rss_pages": int(rest[21]),
+        }
+
+    def _read_processes(self, elapsed: float | None) -> dict[str, Any]:
+        current: dict[tuple[int, int], dict[str, Any]] = {}
+        states = collections.Counter()
+        metrics: list[dict[str, Any]] = []
+        proc_root = pathlib.Path("/proc")
+        for entry in os.scandir(proc_root):
+            if not entry.name.isdigit():
+                continue
+            pid = int(entry.name)
+            proc_dir = proc_root / entry.name
+            stat_text = read_text(proc_dir / "stat")
+            if not stat_text:
+                continue
+            parsed = self._parse_process_stat(stat_text)
+            if not parsed:
+                continue
+            key = (pid, parsed["starttime"])
+            rss_bytes = parsed["rss_pages"] * self.page_size
+            io_read = io_write = None
+            io_text = read_text(proc_dir / "io")
+            if io_text:
+                for line in io_text.splitlines():
+                    if line.startswith("read_bytes:"):
+                        io_read = int(line.split()[1])
+                    elif line.startswith("write_bytes:"):
+                        io_write = int(line.split()[1])
+            record = {
+                "pid": pid,
+                "starttime": parsed["starttime"],
+                "name": (read_text(proc_dir / "comm") or parsed["comm"]).strip(),
+                "state": parsed["state"],
+                "rss_bytes": rss_bytes,
+                "vsize_bytes": parsed["vsize"],
+                "utime": parsed["utime"],
+                "stime": parsed["stime"],
+                "majflt": parsed["majflt"],
+                "num_threads": parsed["num_threads"],
+                "read_bytes": io_read,
+                "write_bytes": io_write,
+            }
+            current[key] = record
+            states[record["state"]] += 1
+
+        for key, current_proc in current.items():
+            prev_proc = self.prev_processes.get(key)
+            cpu_pct = read_bps = write_bps = majflt_s = 0.0
+            if prev_proc and elapsed and elapsed > 0:
+                delta_ticks = (
+                    current_proc["utime"]
+                    + current_proc["stime"]
+                    - prev_proc["utime"]
+                    - prev_proc["stime"]
+                )
+                cpu_pct = delta_ticks * 100.0 / (elapsed * self.clk_tck)
+                if (
+                    current_proc["read_bytes"] is not None
+                    and prev_proc["read_bytes"] is not None
+                ):
+                    read_bps = max(
+                        0.0,
+                        (current_proc["read_bytes"] - prev_proc["read_bytes"]) / elapsed,
+                    )
+                if (
+                    current_proc["write_bytes"] is not None
+                    and prev_proc["write_bytes"] is not None
+                ):
+                    write_bps = max(
+                        0.0,
+                        (current_proc["write_bytes"] - prev_proc["write_bytes"]) / elapsed,
+                    )
+                majflt_s = max(0.0, (current_proc["majflt"] - prev_proc["majflt"]) / elapsed)
+            metrics.append(
+                {
+                    "pid": current_proc["pid"],
+                    "starttime": current_proc["starttime"],
+                    "name": current_proc["name"],
+                    "state": current_proc["state"],
+                    "rss_bytes": current_proc["rss_bytes"],
+                    "vsize_bytes": current_proc["vsize_bytes"],
+                    "threads": current_proc["num_threads"],
+                    "cpu_pct": round_float(cpu_pct),
+                    "read_bps": round_float(read_bps),
+                    "write_bps": round_float(write_bps),
+                    "io_bps": round_float(read_bps + write_bps),
+                    "majflt_s": round_float(majflt_s),
+                }
+            )
+
+        def top_by(field: str, include_zero: bool = False) -> list[dict[str, Any]]:
+            rows = [
+                row
+                for row in metrics
+                if include_zero
+                or (row.get(field) is not None and float(row.get(field, 0.0)) > 0.0)
+            ]
+            rows.sort(key=lambda row: (float(row.get(field) or 0.0), row["rss_bytes"]), reverse=True)
+            return rows[: self.top_n]
+
+        d_state = [row for row in metrics if row["state"] == "D"]
+        d_state.sort(key=lambda row: (row["rss_bytes"], row["pid"]), reverse=True)
+        selected_keys = {
+            (row["pid"], row["starttime"])
+            for row in top_by("cpu_pct")
+            + top_by("rss_bytes", include_zero=True)
+            + top_by("io_bps")
+            + d_state[: self.top_n]
+        }
+
+        cmdlines: dict[tuple[int, int], str] = {}
+        for pid, starttime in selected_keys:
+            raw_cmdline = read_text(pathlib.Path("/proc") / str(pid) / "cmdline")
+            if raw_cmdline:
+                cmdline = raw_cmdline.replace("\x00", " ").strip()
+                if cmdline:
+                    cmdlines[(pid, starttime)] = cmdline[:240]
+
+        def enrich(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+            enriched: list[dict[str, Any]] = []
+            for row in rows:
+                payload = dict(row)
+                cmdline = cmdlines.get((row["pid"], row["starttime"]))
+                if cmdline and cmdline != row["name"]:
+                    payload["cmdline"] = cmdline
+                payload.pop("starttime", None)
+                enriched.append(payload)
+            return enriched
+
+        process_snapshot = {
+            "counts": {
+                "total": sum(states.values()),
+                "running": states.get("R", 0),
+                "sleeping": states.get("S", 0),
+                "uninterruptible": states.get("D", 0),
+                "zombies": states.get("Z", 0),
+            },
+            "top_cpu": enrich(top_by("cpu_pct")),
+            "top_rss": enrich(top_by("rss_bytes", include_zero=True)),
+            "top_io": enrich(top_by("io_bps")),
+            "d_state": enrich(d_state[: self.top_n]),
+        }
+        self.prev_processes = current
+        return process_snapshot
+
+    def _cpu_metrics(self, current: dict[str, Any], elapsed: float | None) -> dict[str, Any] | None:
+        fields = current.get("cpu_fields")
+        prev_fields = self.prev_proc_stat.get("cpu_fields") if self.prev_proc_stat else None
+        if not fields or not prev_fields or elapsed is None or elapsed <= 0:
+            return None
+        labels = [
+            "user",
+            "nice",
+            "system",
+            "idle",
+            "iowait",
+            "irq",
+            "softirq",
+            "steal",
+            "guest",
+            "guest_nice",
+        ]
+        deltas = [fields[i] - prev_fields[i] for i in range(min(len(fields), len(prev_fields)))]
+        total = sum(deltas)
+        if total <= 0:
+            return None
+        values = {label: deltas[idx] * 100.0 / total for idx, label in enumerate(labels[: len(deltas)])}
+        utilization = (
+            values.get("user", 0.0)
+            + values.get("nice", 0.0)
+            + values.get("system", 0.0)
+            + values.get("irq", 0.0)
+            + values.get("softirq", 0.0)
+            + values.get("steal", 0.0)
+        )
+        return {
+            "utilization_pct": round_float(utilization),
+            "user_pct": round_float(values.get("user")),
+            "system_pct": round_float(values.get("system")),
+            "nice_pct": round_float(values.get("nice")),
+            "idle_pct": round_float(values.get("idle")),
+            "iowait_pct": round_float(values.get("iowait")),
+            "irq_pct": round_float(values.get("irq")),
+            "softirq_pct": round_float(values.get("softirq")),
+            "steal_pct": round_float(values.get("steal")),
+            "ctxt_per_s": round_float(
+                (current["ctxt"] - self.prev_proc_stat["ctxt"]) / elapsed
+                if current.get("ctxt") is not None and self.prev_proc_stat.get("ctxt") is not None
+                else None
+            ),
+            "forks_per_s": round_float(
+                (current["processes"] - self.prev_proc_stat["processes"]) / elapsed
+                if current.get("processes") is not None
+                and self.prev_proc_stat.get("processes") is not None
+                else None
+            ),
+        }
+
+    def _memory_metrics(self, meminfo: dict[str, int]) -> dict[str, Any]:
+        total = meminfo.get("MemTotal", 0)
+        available = meminfo.get("MemAvailable", meminfo.get("MemFree", 0))
+        swap_total = meminfo.get("SwapTotal", 0)
+        swap_free = meminfo.get("SwapFree", 0)
+        swap_used = max(0, swap_total - swap_free)
+        return {
+            "total_bytes": total,
+            "available_bytes": available,
+            "available_pct": round_float(available * 100.0 / total if total else None),
+            "used_bytes": max(0, total - available),
+            "swap_total_bytes": swap_total,
+            "swap_used_bytes": swap_used,
+            "swap_used_pct": round_float(swap_used * 100.0 / swap_total if swap_total else 0.0),
+            "dirty_bytes": meminfo.get("Dirty"),
+            "writeback_bytes": meminfo.get("Writeback"),
+            "anon_bytes": meminfo.get("AnonPages"),
+            "mapped_bytes": meminfo.get("Mapped"),
+            "shmem_bytes": meminfo.get("Shmem"),
+            "cached_bytes": meminfo.get("Cached"),
+            "buffers_bytes": meminfo.get("Buffers"),
+            "slab_bytes": meminfo.get("Slab"),
+            "sreclaimable_bytes": meminfo.get("SReclaimable"),
+            "kernel_stack_bytes": meminfo.get("KernelStack"),
+            "pagetables_bytes": meminfo.get("PageTables"),
+        }
+
+    def _vm_metrics(self, current: dict[str, int], elapsed: float | None) -> dict[str, Any]:
+        results: dict[str, Any] = {}
+        for key in VMSTAT_KEYS:
+            results[f"{key}_total"] = current.get(key)
+        if not self.prev_vmstat or elapsed is None or elapsed <= 0:
+            return results
+        page_rate_keys = {"pswpin", "pswpout"}
+        for key in VMSTAT_KEYS:
+            if key not in current or key not in self.prev_vmstat:
+                continue
+            delta = current[key] - self.prev_vmstat[key]
+            value = delta / elapsed
+            if key in page_rate_keys:
+                value *= self.page_size
+                results[f"{key}_bytes_per_s"] = round_float(value)
+            else:
+                results[f"{key}_per_s"] = round_float(value)
+        return results
+
+    def _pressure_metrics(
+        self,
+        current: dict[str, dict[str, dict[str, float | int]]],
+        elapsed: float | None,
+    ) -> dict[str, Any]:
+        results: dict[str, Any] = {}
+        for resource, scopes in current.items():
+            resource_payload: dict[str, Any] = {}
+            for scope, values in scopes.items():
+                payload = {
+                    "avg10": round_float(float(values.get("avg10", 0.0))),
+                    "avg60": round_float(float(values.get("avg60", 0.0))),
+                    "avg300": round_float(float(values.get("avg300", 0.0))),
+                    "total_us": int(values.get("total", 0)),
+                }
+                prev_total = None
+                if self.prev_pressure:
+                    prev_total = self.prev_pressure.get(resource, {}).get(scope, {}).get("total")
+                if prev_total is not None and elapsed and elapsed > 0:
+                    stall_pct = (int(values["total"]) - int(prev_total)) * 100.0 / (elapsed * 1_000_000.0)
+                    payload["stall_pct"] = round_float(stall_pct)
+                resource_payload[scope] = payload
+            results[resource] = resource_payload
+        return results
+
+    def _disk_metrics(self, current: dict[str, dict[str, int]], elapsed: float | None) -> dict[str, Any]:
+        active: list[dict[str, Any]] = []
+        for name, stats in current.items():
+            prev = self.prev_diskstats.get(name) if self.prev_diskstats else None
+            if not prev or elapsed is None or elapsed <= 0:
+                continue
+            sector_size = self.block_devices.get(name, 512)
+            read_bps = (stats["sectors_read"] - prev["sectors_read"]) * sector_size / elapsed
+            write_bps = (stats["sectors_written"] - prev["sectors_written"]) * sector_size / elapsed
+            read_iops = (stats["reads_completed"] - prev["reads_completed"]) / elapsed
+            write_iops = (stats["writes_completed"] - prev["writes_completed"]) / elapsed
+            util_pct = (stats["io_ms"] - prev["io_ms"]) * 100.0 / (elapsed * 1000.0)
+            queue_depth = (stats["weighted_io_ms"] - prev["weighted_io_ms"]) / (elapsed * 1000.0)
+            payload = {
+                "device": name,
+                "read_bps": round_float(max(0.0, read_bps)),
+                "write_bps": round_float(max(0.0, write_bps)),
+                "read_iops": round_float(max(0.0, read_iops)),
+                "write_iops": round_float(max(0.0, write_iops)),
+                "util_pct": round_float(max(0.0, util_pct)),
+                "queue_depth": round_float(max(0.0, queue_depth)),
+                "io_in_progress": stats["io_in_progress"],
+            }
+            if any(
+                float(payload[key] or 0.0) > 0.0
+                for key in ("read_bps", "write_bps", "read_iops", "write_iops", "util_pct", "queue_depth")
+            ) or stats["io_in_progress"] > 0:
+                active.append(payload)
+        active.sort(
+            key=lambda row: (
+                float(row.get("util_pct") or 0.0),
+                float(row.get("read_bps") or 0.0) + float(row.get("write_bps") or 0.0),
+            ),
+            reverse=True,
+        )
+        return {"active_devices": active[: self.top_n]}
+
+    def _network_metrics(
+        self, current: dict[str, dict[str, int]], elapsed: float | None
+    ) -> dict[str, Any]:
+        active: list[dict[str, Any]] = []
+        for iface, stats in current.items():
+            prev = self.prev_netdev.get(iface) if self.prev_netdev else None
+            if not prev or elapsed is None or elapsed <= 0:
+                continue
+            rx_bps = (stats["rx_bytes"] - prev["rx_bytes"]) / elapsed
+            tx_bps = (stats["tx_bytes"] - prev["tx_bytes"]) / elapsed
+            payload = {
+                "iface": iface,
+                "rx_bps": round_float(max(0.0, rx_bps)),
+                "tx_bps": round_float(max(0.0, tx_bps)),
+            }
+            if float(payload["rx_bps"] or 0.0) > 0.0 or float(payload["tx_bps"] or 0.0) > 0.0:
+                active.append(payload)
+        active.sort(
+            key=lambda row: float(row.get("rx_bps") or 0.0) + float(row.get("tx_bps") or 0.0),
+            reverse=True,
+        )
+        return {"active_interfaces": active[: self.top_n]}
+
+    def sample(self) -> dict[str, Any]:
+        started = time.monotonic()
+        now = utc_now()
+        elapsed = started - self.prev_at if self.prev_at is not None else None
+        proc_stat = parse_proc_stat()
+        meminfo = parse_meminfo()
+        vmstat = parse_vmstat()
+        pressure = parse_pressure()
+        diskstats = self._parse_diskstats()
+        netdev = parse_netdev()
+        thermal = self._parse_thermal()
+        gpu = self._parse_nvidia()
+        processes = self._read_processes(elapsed)
+        cpu = self._cpu_metrics(proc_stat, elapsed)
+        memory = self._memory_metrics(meminfo)
+        vm = self._vm_metrics(vmstat, elapsed)
+        pressure_metrics = self._pressure_metrics(pressure, elapsed)
+        disk = self._disk_metrics(diskstats, elapsed)
+        network = self._network_metrics(netdev, elapsed)
+        sample = {
+            "timestamp": local_iso(now),
+            "sample_period_sec": round_float(elapsed, 3),
+            "loadavg": parse_loadavg(),
+            "scheduler": {
+                "procs_running": proc_stat.get("procs_running"),
+                "procs_blocked": proc_stat.get("procs_blocked"),
+            },
+            "cpu": cpu,
+            "memory": memory,
+            "vm": vm,
+            "pressure": pressure_metrics,
+            "disk": disk,
+            "network": network,
+            "thermal": thermal,
+            "gpu": gpu,
+            "processes": processes,
+        }
+        sample["alerts"] = detect_alerts(sample, self.cpu_count)
+        sample["sample_cost_ms"] = round_float((time.monotonic() - started) * 1000.0, 1)
+
+        self.prev_at = started
+        self.prev_proc_stat = proc_stat
+        self.prev_vmstat = vmstat
+        self.prev_pressure = pressure
+        self.prev_diskstats = diskstats
+        self.prev_netdev = netdev
+        return sample
+
+
+def detect_alerts(sample: dict[str, Any], cpu_count: int) -> list[dict[str, Any]]:
+    alerts: list[dict[str, Any]] = []
+    cpu = sample.get("cpu") or {}
+    memory = sample.get("memory") or {}
+    vm = sample.get("vm") or {}
+    scheduler = sample.get("scheduler") or {}
+    loadavg = sample.get("loadavg") or {}
+    pressure = sample.get("pressure") or {}
+    disk = sample.get("disk") or {}
+    thermal = sample.get("thermal") or {}
+    gpu = sample.get("gpu") or {}
+    processes = sample.get("processes") or {}
+
+    iowait = cpu.get("iowait_pct")
+    if iowait is not None and iowait >= 10.0:
+        alerts.append({"code": "high_iowait", "message": f"CPU iowait {iowait:.1f}%"})
+
+    utilization = cpu.get("utilization_pct")
+    if utilization is not None and utilization >= 90.0:
+        alerts.append({"code": "cpu_saturation", "message": f"CPU utilization {utilization:.1f}%"})
+
+    blocked = scheduler.get("procs_blocked") or 0
+    d_state = processes.get("d_state") or []
+    if blocked >= 3 or (blocked > 0 and (d_state or (iowait is not None and iowait >= 5.0))):
+        alerts.append({"code": "blocked_tasks", "message": f"{blocked} blocked task(s)"})
+    if d_state:
+        names = ", ".join(f"{proc['name']}[{proc['pid']}]" for proc in d_state[:3])
+        alerts.append({"code": "d_state", "message": f"D-state process(es): {names}"})
+
+    available_pct = memory.get("available_pct")
+    if available_pct is not None and available_pct <= 10.0:
+        alerts.append(
+            {
+                "code": "low_mem_available",
+                "message": f"MemAvailable {available_pct:.1f}% ({human_bytes(memory.get('available_bytes'))})",
+            }
+        )
+
+    swap_rate = float(vm.get("pswpin_bytes_per_s") or 0.0) + float(vm.get("pswpout_bytes_per_s") or 0.0)
+    if swap_rate >= 1024 * 1024:
+        alerts.append(
+            {
+                "code": "swap_activity",
+                "message": f"Swap traffic {human_bytes(swap_rate)}/s",
+            }
+        )
+
+    pgmajfault_s = vm.get("pgmajfault_per_s")
+    if pgmajfault_s is not None and pgmajfault_s >= 25.0:
+        alerts.append({"code": "major_faults", "message": f"Major faults {pgmajfault_s:.1f}/s"})
+
+    memory_full = pressure.get("memory", {}).get("full", {})
+    memory_some = pressure.get("memory", {}).get("some", {})
+    memory_avg10 = max(
+        float(memory_full.get("avg10") or 0.0),
+        float(memory_some.get("avg10") or 0.0),
+    )
+    memory_stall = max(
+        float(memory_full.get("stall_pct") or 0.0),
+        float(memory_some.get("stall_pct") or 0.0),
+    )
+    if memory_stall >= 2.0 or (
+        memory_avg10 >= 5.0
+        and (
+            (available_pct is not None and available_pct <= 20.0)
+            or swap_rate >= 1024 * 1024
+            or (pgmajfault_s is not None and pgmajfault_s >= 10.0)
+        )
+    ):
+        alerts.append(
+            {
+                "code": "memory_pressure",
+                "message": f"Memory PSI avg10 {memory_avg10:.2f}, stall {memory_stall:.2f}%",
+            }
+        )
+
+    io_some = pressure.get("io", {}).get("some", {})
+    io_full = pressure.get("io", {}).get("full", {})
+    busiest_disk = None
+    for device in disk.get("active_devices", []):
+        if busiest_disk is None or float(device.get("util_pct") or 0.0) > float(
+            busiest_disk.get("util_pct") or 0.0
+        ):
+            busiest_disk = device
+    io_some_avg10 = float(io_some.get("avg10") or 0.0)
+    io_full_avg10 = float(io_full.get("avg10") or 0.0)
+    io_full_stall = float(io_full.get("stall_pct") or 0.0)
+    io_support = (
+        (iowait is not None and iowait >= 5.0)
+        or blocked >= 3
+        or bool(d_state)
+        or (busiest_disk and float(busiest_disk.get("util_pct") or 0.0) >= 40.0)
+    )
+    if io_support and (io_full_stall >= 5.0 or io_full_avg10 >= 10.0 or io_some_avg10 >= 20.0):
+        alerts.append(
+            {
+                "code": "io_pressure",
+                "message": (
+                    f"IO PSI full avg10 {io_full_avg10:.2f}, full stall {io_full_stall:.2f}%, "
+                    f"some avg10 {io_some_avg10:.2f}"
+                ),
+            }
+        )
+    if busiest_disk and float(busiest_disk.get("util_pct") or 0.0) >= 70.0:
+        alerts.append(
+            {
+                "code": "disk_busy",
+                "message": f"{busiest_disk['device']} util {busiest_disk['util_pct']:.1f}%",
+            }
+        )
+
+    run_queue = scheduler.get("procs_running") or 0
+    if run_queue > cpu_count:
+        alerts.append({"code": "run_queue", "message": f"Run queue {run_queue} on {cpu_count} CPUs"})
+
+    load_one = loadavg.get("one")
+    if load_one is not None and load_one >= max(4.0, cpu_count * 1.2):
+        alerts.append({"code": "high_load", "message": f"Load average 1m {load_one:.2f}"})
+
+    cpu_freq = thermal.get("cpu_freq") if thermal else None
+    max_temp = thermal.get("max_temp_c") if thermal else None
+    if max_temp is not None and max_temp >= 85.0:
+        alerts.append({"code": "thermal_throttle", "message": f"Thermal zone {max_temp:.1f} C"})
+    if cpu_freq and cpu_freq.get("pct_of_max") is not None and utilization is not None:
+        if cpu_freq["pct_of_max"] <= 60.0 and utilization >= 40.0:
+            alerts.append(
+                {
+                    "code": "thermal_throttle",
+                    "message": f"CPU freq {cpu_freq['pct_of_max']:.1f}% of max under load",
+                }
+            )
+
+    for gpu_info in gpu.get("gpus", []) if gpu else []:
+        gpu_util = gpu_info.get("utilization_pct")
+        if gpu_util is not None and gpu_util >= 95.0:
+            alerts.append(
+                {
+                    "code": "gpu_busy",
+                    "message": f"GPU {gpu_info['index']} util {gpu_util:.1f}%",
+                }
+            )
+    return alerts
+
+
+def representative_processes(sample: dict[str, Any]) -> list[str]:
+    proc = sample.get("processes") or {}
+    snippets: list[str] = []
+    if proc.get("top_cpu"):
+        top = proc["top_cpu"][0]
+        snippets.append(f"top CPU {top['name']}[{top['pid']}] {top.get('cpu_pct', 0)}%")
+    if proc.get("top_io"):
+        top = proc["top_io"][0]
+        total_bps = float(top.get("io_bps") or 0.0)
+        if total_bps > 0:
+            snippets.append(f"top IO {top['name']}[{top['pid']}] {human_bytes(total_bps)}/s")
+    if proc.get("d_state"):
+        top = proc["d_state"][0]
+        snippets.append(f"D-state {top['name']}[{top['pid']}]")
+    return snippets
+
+
+def score_sample(sample: dict[str, Any]) -> int:
+    return sum(ALERT_WEIGHTS.get(alert["code"], 1) for alert in sample.get("alerts", []))
+
+
+def parse_ts(raw: str) -> dt.datetime:
+    return dt.datetime.fromisoformat(raw)
+
+
+def group_alert_windows(samples: list[dict[str, Any]]) -> list[list[dict[str, Any]]]:
+    alert_samples = [sample for sample in samples if sample.get("alerts")]
+    if not alert_samples:
+        return []
+    intervals = [sample.get("sample_period_sec") for sample in samples if sample.get("sample_period_sec")]
+    median_interval = statistics.median(intervals) if intervals else 10.0
+    gap = max(5.0, median_interval * 1.5)
+    windows: list[list[dict[str, Any]]] = []
+    current_window = [alert_samples[0]]
+    previous_ts = parse_ts(alert_samples[0]["timestamp"])
+    for sample in alert_samples[1:]:
+        sample_ts = parse_ts(sample["timestamp"])
+        if (sample_ts - previous_ts).total_seconds() <= gap:
+            current_window.append(sample)
+        else:
+            windows.append(current_window)
+            current_window = [sample]
+        previous_ts = sample_ts
+    windows.append(current_window)
+    return windows
+
+
+def kernel_hints(start: str | None, end: str | None) -> list[str]:
+    if not start or not end or not shutil.which("journalctl"):
+        return []
+    cmd = [
+        "journalctl",
+        "-k",
+        "--since",
+        start,
+        "--until",
+        end,
+        "--no-pager",
+        "-o",
+        "short-iso",
+    ]
+    try:
+        proc = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return []
+    if proc.returncode != 0:
+        return []
+    matches = [line for line in proc.stdout.splitlines() if SUSPICIOUS_KERNEL_RE.search(line)]
+    return matches[-20:]
+
+
+def build_summary(
+    session_dir: pathlib.Path,
+    samples: list[dict[str, Any]],
+    metadata: dict[str, Any],
+) -> tuple[dict[str, Any], str]:
+    start = samples[0]["timestamp"] if samples else metadata.get("start_time")
+    end = samples[-1]["timestamp"] if samples else metadata.get("end_time")
+    duration_sec = None
+    if start and end:
+        duration_sec = (parse_ts(end) - parse_ts(start)).total_seconds()
+
+    alert_counts = collections.Counter(
+        alert["code"] for sample in samples for alert in sample.get("alerts", [])
+    )
+    peak_cpu = max(
+        (sample for sample in samples if sample.get("cpu")),
+        key=lambda item: float(item["cpu"].get("utilization_pct") or 0.0),
+        default=None,
+    )
+    peak_iowait = max(
+        (sample for sample in samples if sample.get("cpu")),
+        key=lambda item: float(item["cpu"].get("iowait_pct") or 0.0),
+        default=None,
+    )
+    lowest_mem = min(
+        (sample for sample in samples if sample.get("memory")),
+        key=lambda item: float(item["memory"].get("available_pct") or 100.0),
+        default=None,
+    )
+    peak_majflt = max(
+        (
+            sample
+            for sample in samples
+            if sample.get("vm") and sample["vm"].get("pgmajfault_per_s") is not None
+        ),
+        key=lambda item: float(item["vm"].get("pgmajfault_per_s") or 0.0),
+        default=None,
+    )
+    peak_blocked = max(
+        samples,
+        key=lambda item: int((item.get("scheduler") or {}).get("procs_blocked") or 0),
+        default=None,
+    )
+
+    peak_disk_sample = None
+    peak_disk_device = None
+    for sample in samples:
+        for device in (sample.get("disk") or {}).get("active_devices", []):
+            if peak_disk_device is None or float(device.get("util_pct") or 0.0) > float(
+                peak_disk_device.get("util_pct") or 0.0
+            ):
+                peak_disk_sample = sample
+                peak_disk_device = device
+
+    peak_temp_sample = None
+    peak_temp = None
+    for sample in samples:
+        thermal = sample.get("thermal") or {}
+        value = thermal.get("max_temp_c")
+        if value is None:
+            continue
+        if peak_temp is None or float(value) > float(peak_temp):
+            peak_temp = value
+            peak_temp_sample = sample
+
+    peak_gpu_sample = None
+    peak_gpu = None
+    for sample in samples:
+        for gpu_info in (sample.get("gpu") or {}).get("gpus", []):
+            value = gpu_info.get("utilization_pct")
+            if value is None:
+                continue
+            if peak_gpu is None or float(value) > float(peak_gpu["utilization_pct"] or 0.0):
+                peak_gpu_sample = sample
+                peak_gpu = gpu_info
+
+    windows_payload: list[dict[str, Any]] = []
+    for window in group_alert_windows(samples):
+        representative = max(window, key=score_sample)
+        codes = sorted({alert["code"] for sample in window for alert in sample.get("alerts", [])})
+        messages = sorted({alert["message"] for sample in window for alert in sample.get("alerts", [])})
+        windows_payload.append(
+            {
+                "start": window[0]["timestamp"],
+                "end": window[-1]["timestamp"],
+                "sample_count": len(window),
+                "codes": codes,
+                "messages": messages,
+                "representative_processes": representative_processes(representative),
+            }
+        )
+    windows_payload.sort(key=lambda item: (len(item["codes"]), item["sample_count"]), reverse=True)
+    windows_payload = windows_payload[:10]
+
+    summary = {
+        "session_dir": str(session_dir),
+        "sample_count": len(samples),
+        "start_time": start,
+        "end_time": end,
+        "duration_sec": round_float(duration_sec),
+        "alert_counts": dict(alert_counts),
+        "windows": windows_payload,
+        "kernel_hints": kernel_hints(start, end),
+        "peaks": {
+            "cpu_utilization": {
+                "timestamp": peak_cpu["timestamp"] if peak_cpu else None,
+                "utilization_pct": peak_cpu["cpu"].get("utilization_pct") if peak_cpu else None,
+            },
+            "cpu_iowait": {
+                "timestamp": peak_iowait["timestamp"] if peak_iowait else None,
+                "iowait_pct": peak_iowait["cpu"].get("iowait_pct") if peak_iowait else None,
+            },
+            "blocked_tasks": {
+                "timestamp": peak_blocked["timestamp"] if peak_blocked else None,
+                "count": (peak_blocked.get("scheduler") or {}).get("procs_blocked") if peak_blocked else None,
+            },
+            "lowest_mem_available": {
+                "timestamp": lowest_mem["timestamp"] if lowest_mem else None,
+                "available_pct": lowest_mem["memory"].get("available_pct") if lowest_mem else None,
+                "available_bytes": lowest_mem["memory"].get("available_bytes") if lowest_mem else None,
+            },
+            "major_faults": {
+                "timestamp": peak_majflt["timestamp"] if peak_majflt else None,
+                "pgmajfault_per_s": peak_majflt["vm"].get("pgmajfault_per_s") if peak_majflt else None,
+            },
+            "disk_utilization": {
+                "timestamp": peak_disk_sample["timestamp"] if peak_disk_sample else None,
+                "device": peak_disk_device["device"] if peak_disk_device else None,
+                "util_pct": peak_disk_device.get("util_pct") if peak_disk_device else None,
+                "queue_depth": peak_disk_device.get("queue_depth") if peak_disk_device else None,
+            },
+            "temperature": {
+                "timestamp": peak_temp_sample["timestamp"] if peak_temp_sample else None,
+                "max_temp_c": peak_temp,
+            },
+            "gpu_utilization": {
+                "timestamp": peak_gpu_sample["timestamp"] if peak_gpu_sample else None,
+                "gpu": peak_gpu,
+            },
+        },
+    }
+
+    def show(value: Any, suffix: str = "") -> str:
+        if value is None:
+            return "n/a"
+        return f"{value}{suffix}"
+
+    lines = [
+        "sluggish-watch summary",
+        f"session: {session_dir}",
+        f"start:   {start or 'n/a'}",
+        f"end:     {end or 'n/a'}",
+        f"span:    {human_duration(duration_sec)}",
+        f"samples: {len(samples)}",
+        "",
+        "peaks:",
+        f"- CPU utilization: {show(summary['peaks']['cpu_utilization']['utilization_pct'], '%')} at {summary['peaks']['cpu_utilization']['timestamp'] or 'n/a'}",
+        f"- CPU iowait: {show(summary['peaks']['cpu_iowait']['iowait_pct'], '%')} at {summary['peaks']['cpu_iowait']['timestamp'] or 'n/a'}",
+        f"- Blocked tasks: {show(summary['peaks']['blocked_tasks']['count'])} at {summary['peaks']['blocked_tasks']['timestamp'] or 'n/a'}",
+        f"- Lowest MemAvailable: {show(summary['peaks']['lowest_mem_available']['available_pct'], '%')} ({human_bytes(summary['peaks']['lowest_mem_available']['available_bytes'])}) at {summary['peaks']['lowest_mem_available']['timestamp'] or 'n/a'}",
+        f"- Major faults: {show(summary['peaks']['major_faults']['pgmajfault_per_s'], '/s')} at {summary['peaks']['major_faults']['timestamp'] or 'n/a'}",
+    ]
+    disk_peak = summary["peaks"]["disk_utilization"]
+    if disk_peak["device"]:
+        lines.append(
+            f"- Busiest disk: {disk_peak['device']} {disk_peak['util_pct']}% util at {disk_peak['timestamp']}"
+        )
+    temp_peak = summary["peaks"]["temperature"]
+    if temp_peak["max_temp_c"] is not None:
+        lines.append(f"- Max temp: {temp_peak['max_temp_c']} C at {temp_peak['timestamp']}")
+    gpu_peak = summary["peaks"]["gpu_utilization"]
+    if gpu_peak["gpu"]:
+        lines.append(
+            f"- Peak GPU: {gpu_peak['gpu']['name']} {gpu_peak['gpu']['utilization_pct']}% at {gpu_peak['timestamp']}"
+        )
+
+    lines.extend(["", "alert counts:"])
+    if alert_counts:
+        for code, count in alert_counts.most_common():
+            lines.append(f"- {code}: {count}")
+    else:
+        lines.append("- none crossed the built-in thresholds")
+
+    lines.extend(["", "interesting windows:"])
+    if windows_payload:
+        for window in windows_payload:
+            lines.append(
+                f"- {window['start']} to {window['end']}: {', '.join(window['codes'])}"
+            )
+            for snippet in window["representative_processes"]:
+                lines.append(f"  {snippet}")
+    else:
+        lines.append("- none")
+
+    if summary["kernel_hints"]:
+        lines.extend(["", "kernel hints:"])
+        for line in summary["kernel_hints"]:
+            lines.append(f"- {line}")
+
+    return summary, "\n".join(lines) + "\n"
+
+
+def session_metadata(args: argparse.Namespace, session_dir: pathlib.Path, sampler: Sampler) -> dict[str, Any]:
+    os_release = parse_os_release()
+    return {
+        "version": VERSION,
+        "host": socket.gethostname(),
+        "session_dir": str(session_dir),
+        "start_time": local_iso(),
+        "kernel": platform.release(),
+        "platform": platform.platform(),
+        "python": sys.version.split()[0],
+        "os_release": os_release,
+        "cpu_count": sampler.cpu_count,
+        "page_size": sampler.page_size,
+        "clk_tck": sampler.clk_tck,
+        "block_devices": sorted(sampler.block_devices),
+        "argv": sys.argv,
+        "config": {
+            "interval_sec": args.interval_sec,
+            "duration_sec": args.duration_sec,
+            "burst_interval_sec": args.burst_interval_sec,
+            "burst_count": args.burst_count,
+            "top_n": args.top_n,
+            "with_gpu": args.with_gpu,
+        },
+    }
+
+
+def record(args: argparse.Namespace) -> int:
+    session_dir = build_session_dir(args.output_dir)
+    ensure_empty_dir(session_dir)
+    samples_path = session_dir / "samples.jsonl"
+    alerts_path = session_dir / "alerts.jsonl"
+    metadata_path = session_dir / "metadata.json"
+    summary_json_path = session_dir / "summary.json"
+    summary_txt_path = session_dir / "summary.txt"
+
+    sampler = Sampler(top_n=args.top_n, with_gpu=args.with_gpu)
+    metadata = session_metadata(args, session_dir, sampler)
+    write_json(metadata_path, metadata)
+
+    if not args.quiet:
+        print(f"sluggish-watch: writing to {session_dir}", file=sys.stderr)
+
+    next_delay = 0.0
+    burst_remaining = 0
+    sample_count = 0
+    interrupted = False
+    start_monotonic = time.monotonic()
+    deadline = start_monotonic + args.duration_sec
+
+    try:
+        while True:
+            if next_delay > 0:
+                time.sleep(next_delay)
+            sample = sampler.sample()
+            append_jsonl(samples_path, sample)
+            sample_count += 1
+            if sample["alerts"]:
+                alert_record = {
+                    "timestamp": sample["timestamp"],
+                    "alerts": sample["alerts"],
+                    "representative_processes": representative_processes(sample),
+                }
+                append_jsonl(alerts_path, alert_record)
+                if not args.quiet:
+                    messages = ", ".join(alert["message"] for alert in sample["alerts"])
+                    print(f"{sample['timestamp']} alert: {messages}", file=sys.stderr)
+                if burst_remaining == 0 and args.burst_interval_sec < args.interval_sec:
+                    burst_remaining = args.burst_count
+            now = time.monotonic()
+            if now >= deadline:
+                break
+            if burst_remaining > 0:
+                next_delay = min(args.burst_interval_sec, max(0.0, deadline - now))
+                burst_remaining -= 1
+            else:
+                next_delay = min(args.interval_sec, max(0.0, deadline - now))
+    except KeyboardInterrupt:
+        interrupted = True
+        if not args.quiet:
+            print("sluggish-watch: interrupted, finalizing session", file=sys.stderr)
+
+    metadata["end_time"] = local_iso()
+    metadata["sample_count"] = sample_count
+    metadata["interrupted"] = interrupted
+    write_json(metadata_path, metadata)
+
+    samples = load_jsonl(samples_path)
+    summary_json, summary_text = build_summary(session_dir, samples, metadata)
+    write_json(summary_json_path, summary_json)
+    summary_txt_path.write_text(summary_text, encoding="utf-8")
+
+    if not args.quiet:
+        print(summary_text, file=sys.stderr, end="")
+    return 130 if interrupted else 0
+
+
+def summarize(args: argparse.Namespace) -> int:
+    target = pathlib.Path(args.path).expanduser().resolve()
+    if target.is_dir():
+        session_dir = target
+        samples_path = session_dir / "samples.jsonl"
+        metadata_path = session_dir / "metadata.json"
+    else:
+        samples_path = target
+        session_dir = target.parent
+        metadata_path = session_dir / "metadata.json"
+    samples = load_jsonl(samples_path)
+    metadata = json.loads(metadata_path.read_text(encoding="utf-8")) if metadata_path.exists() else {}
+    summary_json, summary_text = build_summary(session_dir, samples, metadata)
+    (session_dir / "summary.json").write_text(
+        json.dumps(summary_json, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    (session_dir / "summary.txt").write_text(summary_text, encoding="utf-8")
+    print(summary_text, end="")
+    return 0
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="sluggish-watch",
+        description="Record broad Linux performance snapshots to diagnose intermittent sluggishness.",
+        epilog=(
+            "Examples:\n"
+            "  sluggish-watch --interval 10s --duration 6h\n"
+            "  sluggish-watch --interval 30s --duration 4h --output-dir ~/tmp/slow-box\n"
+            "  sluggish-watch summarize ~/.local/state/sluggish-watch/20260417-120000"
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    subparsers = parser.add_subparsers(dest="command")
+
+    record_parser = subparsers.add_parser(
+        "record",
+        help="capture a new session",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    record_parser.add_argument("--output-dir", help="explicit output directory for this session")
+    record_parser.add_argument(
+        "--interval",
+        dest="interval_sec",
+        type=parse_duration,
+        default=parse_duration(DEFAULT_INTERVAL),
+        help=f"normal sample interval, default {DEFAULT_INTERVAL}",
+    )
+    record_parser.add_argument(
+        "--duration",
+        dest="duration_sec",
+        type=parse_duration,
+        default=parse_duration(DEFAULT_DURATION),
+        help=f"how long to capture, default {DEFAULT_DURATION}",
+    )
+    record_parser.add_argument(
+        "--burst-interval",
+        dest="burst_interval_sec",
+        type=parse_duration,
+        default=parse_duration(DEFAULT_BURST_INTERVAL),
+        help=f"faster interval to use briefly after an alert, default {DEFAULT_BURST_INTERVAL}",
+    )
+    record_parser.add_argument(
+        "--burst-count",
+        type=int,
+        default=DEFAULT_BURST_COUNT,
+        help=f"number of faster follow-up samples after an alert, default {DEFAULT_BURST_COUNT}",
+    )
+    record_parser.add_argument(
+        "--top-n",
+        type=int,
+        default=DEFAULT_TOP_N,
+        help=f"top processes/devices to store per sample, default {DEFAULT_TOP_N}",
+    )
+    record_parser.add_argument(
+        "--no-gpu",
+        dest="with_gpu",
+        action="store_false",
+        help="skip optional NVIDIA GPU polling",
+    )
+    record_parser.add_argument(
+        "--quiet",
+        action="store_true",
+        help="suppress stderr progress except fatal errors",
+    )
+    record_parser.set_defaults(func=record, with_gpu=True)
+
+    summarize_parser = subparsers.add_parser(
+        "summarize",
+        help="summarize an existing session directory or samples.jsonl file",
+    )
+    summarize_parser.add_argument("path", help="session directory or samples.jsonl")
+    summarize_parser.set_defaults(func=summarize)
+
+    parser.set_defaults(func=record, command="record", with_gpu=True)
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    raw_argv = list(argv if argv is not None else sys.argv[1:])
+    if not raw_argv:
+        raw_argv = ["record"]
+    elif raw_argv[0] not in {"record", "summarize", "-h", "--help"}:
+        raw_argv = ["record", *raw_argv]
+    parser = build_parser()
+    args = parser.parse_args(raw_argv)
+    if args.command == "record":
+        if args.top_n <= 0:
+            fatal("--top-n must be positive")
+        if args.burst_count < 0:
+            fatal("--burst-count cannot be negative")
+        if args.duration_sec <= 0:
+            fatal("--duration must be positive")
+        if args.interval_sec <= 0 or args.burst_interval_sec <= 0:
+            fatal("intervals must be positive")
+    return args.func(args)
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
