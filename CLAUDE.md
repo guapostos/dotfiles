@@ -26,7 +26,11 @@ stow -D -t ~ <pkg>    # unstow
 
 ## Adding Skills
 
-Add `claude/.claude/skills/<name>/SKILL.md` with YAML frontmatter (`name`, `description` with triggers). Register in `claude/.claude/settings.json` permissions if needed.
+Shared cross-agent skills live at `agents/.agents/skills/<name>/SKILL.md`. The installer fans those out to `~/.claude/skills/`, `~/.codex/skills/`, and `~/.config/opencode/skills/`.
+
+Claude-only skills still live at `claude/.claude/skills/<name>/SKILL.md`.
+
+If a new Claude skill should be invokable without a permission prompt, register it in `claude/.claude/settings.json`.
 
 ## Key Files
 

@@ -84,7 +84,7 @@ rm zellij-x86_64-unknown-linux-musl.tar.gz
 | Package   | Contents                              |
 |-----------+---------------------------------------|
 | alacritty | ~.config/alacritty/alacritty.toml~    |
-| agents    | ~.config/AGENTS.md~                   |
+| agents    | ~.config/AGENTS.md~, shared ~.agents/skills/~ |
 | bash      | ~.bashrc~, ~.zshrc~ (fallback shells) |
 | claude    | ~.claude/~ (agents, skills)           |
 | fish      | ~.config/fish/config.fish~            |
@@ -94,9 +94,11 @@ rm zellij-x86_64-unknown-linux-musl.tar.gz
 | tmux      | ~.tmux.conf~, ~.tmux/~                |
 | zellij    | ~.config/zellij/config.kdl~           |
 
-** Claude Skills
+** Skills
 
-Custom skills for Claude Code CLI (~/.claude/skills/~):
+Shared cross-agent skills live under ~/.agents/skills/~ and are linked into Claude Code, Codex, and OpenCode by the installer. Claude-only skills still live under ~/.claude/skills/~.
+
+Claude-specific skills:
 
 | Skill          | Trigger              | Purpose                                      |
 |----------------+----------------------+----------------------------------------------|

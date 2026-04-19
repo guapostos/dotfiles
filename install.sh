@@ -118,9 +118,10 @@ for pkg in alacritty claude agents bash fish git localbin nix starship tmux zell
 done
 
 # Stow private overlays (personal configs not kept in the public repo).
-# Uses symlinks like claude-private -> ../dotfiles-private/claude-private
-# Stow from this repo preserves tree folding into shared ~/.claude/ and ~/.config/.
-private_overlays=(claude-private git-private opencode-private)
+# These are symlink shims in this repo pointing at ../dotfiles-private/* so
+# Stow can see all overlapping packages from a single stow dir and split
+# shared targets like ~/.claude/ and ~/.agents/ safely.
+private_overlays=(agents-private claude-private gemini-private git-private opencode-private)
 stowed_private=false
 for overlay in "${private_overlays[@]}"; do
     if [ -L "$overlay" ] && [ -d "$overlay" ]; then
@@ -133,13 +134,80 @@ done
 if ! $stowed_private; then
     echo "No private overlays found (optional). To add:"
     echo "  git clone <private-repo> ~/src/dotfiles-private"
+    echo "  ln -sfn ../dotfiles-private/agents-private ~/src/dotfiles/agents-private"
     echo "  ln -sfn ../dotfiles-private/claude-private ~/src/dotfiles/claude-private"
+    echo "  ln -sfn ../dotfiles-private/gemini-private ~/src/dotfiles/gemini-private"
     echo "  ln -sfn ../dotfiles-private/git-private ~/src/dotfiles/git-private"
     echo "  ln -sfn ../dotfiles-private/opencode-private ~/src/dotfiles/opencode-private"
+    echo "  stow -t ~ agents-private"
     echo "  stow -t ~ claude-private"
+    echo "  stow -t ~ gemini-private"
     echo "  stow -t ~ git-private"
     echo "  stow -t ~ opencode-private"
 fi
+
+link_tool_skill() {
+    local target="$1"
+    local source="$2"
+
+    mkdir -p "$(dirname "$target")"
+
+    if [ -L "$target" ]; then
+        local existing desired
+        existing="$(readlink -f -- "$target" 2>/dev/null || true)"
+        desired="$(readlink -f -- "$source" 2>/dev/null || true)"
+        if [ -n "$desired" ] && [ "$existing" = "$desired" ]; then
+            return
+        fi
+    fi
+
+    if [ -e "$target" ] && [ ! -L "$target" ]; then
+        echo "Skipping $target (exists and is not a symlink)"
+        return
+    fi
+
+    ln -sfn "$source" "$target"
+    echo "Linked $target -> $source"
+}
+
+refold_shared_skill_root() {
+    local source_root="$1"
+    local leaf name src_canon current_canon
+
+    [ -d "$source_root" ] || return
+    mkdir -p "$HOME/.agents/skills"
+
+    for src in "$source_root"/*/; do
+        [ -d "$src" ] || continue
+        name="$(basename "$src")"
+        leaf="$HOME/.agents/skills/$name"
+        src_canon="$(readlink -f -- "$src")"
+        current_canon="$(readlink -f -- "$leaf" 2>/dev/null || true)"
+
+        if [ -n "$current_canon" ] && [ "$current_canon" = "$src_canon" ]; then
+            link_tool_skill "$HOME/.claude/skills/$name" "$leaf"
+            link_tool_skill "$HOME/.codex/skills/$name" "$leaf"
+            link_tool_skill "$HOME/.config/opencode/skills/$name" "$leaf"
+            continue
+        fi
+
+        if [ -L "$leaf" ]; then
+            rm -f "$leaf"
+        elif [ -d "$leaf" ]; then
+            rm -rf "$leaf"
+        fi
+
+        ln -sfn "$src_canon" "$leaf"
+        echo "Refolded $leaf -> $src_canon"
+
+        link_tool_skill "$HOME/.claude/skills/$name" "$leaf"
+        link_tool_skill "$HOME/.codex/skills/$name" "$leaf"
+        link_tool_skill "$HOME/.config/opencode/skills/$name" "$leaf"
+    done
+}
+
+refold_shared_skill_root "$(pwd)/agents/.agents/skills"
+refold_shared_skill_root "$(pwd)/agents-private/.agents/skills"
 
 # Symlink AGENTS.md to CLAUDE.md for Claude Code
 if [ -f ~/.config/AGENTS.md ] && [ ! -e ~/.claude/CLAUDE.md ]; then

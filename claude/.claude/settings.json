@@ -15,6 +15,7 @@
       "Skill(checkpoint:*)",
       "Skill(research:*)",
       "Skill(multi-mind:*)",
+      "Skill(prompt-search:*)",
       "Skill(commit:*)",
       "Skill(code-review:*)",
       "Skill(log-analyze:*)",
