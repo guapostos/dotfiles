@@ -111,10 +111,94 @@ if [ ${#manual[@]} -gt 0 ]; then
     echo ""
 fi
 
+shared_skill_names=()
+shared_skill_ignore_args=()
+
+collect_shared_skills() {
+    local root src name
+
+    for root in "$@"; do
+        [ -d "$root" ] || continue
+
+        for src in "$root"/*; do
+            [ -e "$src" ] || continue
+            [ -d "$src" ] || [ -L "$src" ] || continue
+            name="$(basename "$src")"
+            if ! has_shared_skill "$name"; then
+                shared_skill_names+=("$name")
+            fi
+        done
+    done
+}
+
+has_shared_skill() {
+    local candidate="$1"
+    local name
+
+    for name in "${shared_skill_names[@]}"; do
+        if [ "$name" = "$candidate" ]; then
+            return 0
+        fi
+    done
+
+    return 1
+}
+
+regex_escape() {
+    printf '%s' "$1" | sed -e 's/[][(){}.^$+*?|\\]/\\&/g'
+}
+
+build_shared_skill_ignore_args() {
+    local pkg="$1"
+    local pkg_source skill_root entry name escaped_root
+    local shared_names=()
+    local entries=()
+
+    shared_skill_ignore_args=()
+    pkg_source="$(readlink -f -- "$pkg" 2>/dev/null || true)"
+    if [ -z "$pkg_source" ] || [ ! -d "$pkg_source" ]; then
+        return
+    fi
+
+    for skill_root in ".claude/skills" ".codex/skills" ".config/opencode/skills"; do
+        [ -d "$pkg_source/$skill_root" ] || continue
+
+        entries=()
+        shared_names=()
+        while IFS= read -r -d '' entry; do
+            entries+=("$entry")
+            name="$(basename "$entry")"
+            if { [ -d "$entry" ] || [ -L "$entry" ]; } && has_shared_skill "$name"; then
+                shared_names+=("$name")
+            fi
+        done < <(find "$pkg_source/$skill_root" -mindepth 1 -maxdepth 1 -print0 2>/dev/null)
+
+        [ ${#shared_names[@]} -gt 0 ] || continue
+
+        escaped_root="$(regex_escape "$skill_root")"
+        if [ ${#shared_names[@]} -eq ${#entries[@]} ]; then
+            shared_skill_ignore_args+=("--ignore=$escaped_root")
+            continue
+        fi
+
+        for name in "${shared_names[@]}"; do
+            shared_skill_ignore_args+=("--ignore=$escaped_root/$(regex_escape "$name")")
+        done
+    done
+}
+
+shared_skill_roots=("$(pwd)/agents/.agents/skills" "$(pwd)/agents-private/.agents/skills")
+collect_shared_skills "${shared_skill_roots[@]}"
+
 # Stow all packages
-for pkg in alacritty claude agents bash fish git localbin nix starship tmux zellij; do
-    echo "Stowing $pkg..."
-    stow -t ~ "$pkg"
+for pkg in alacritty claude agents bash fish git localbin nix opencode starship tmux zellij; do
+    build_shared_skill_ignore_args "$pkg"
+    if [ ${#shared_skill_ignore_args[@]} -gt 0 ]; then
+        echo "Stowing $pkg (shared skills filtered)..."
+    else
+        echo "Stowing $pkg..."
+    fi
+    stow "${shared_skill_ignore_args[@]}" -t ~ "$pkg"
 done
 
 # Stow private overlays (personal configs not kept in the public repo).
@@ -125,8 +209,13 @@ private_overlays=(agents-private claude-private gemini-private git-private openc
 stowed_private=false
 for overlay in "${private_overlays[@]}"; do
     if [ -L "$overlay" ] && [ -d "$overlay" ]; then
-        echo "Stowing $overlay..."
-        stow -t ~ "$overlay"
+        build_shared_skill_ignore_args "$overlay"
+        if [ ${#shared_skill_ignore_args[@]} -gt 0 ]; then
+            echo "Stowing $overlay (shared skills filtered)..."
+        else
+            echo "Stowing $overlay..."
+        fi
+        stow "${shared_skill_ignore_args[@]}" -t ~ "$overlay"
         stowed_private=true
     fi
 done
@@ -149,14 +238,13 @@ fi
 link_tool_skill() {
     local target="$1"
     local source="$2"
+    local existing_link
 
     mkdir -p "$(dirname "$target")"
 
     if [ -L "$target" ]; then
-        local existing desired
-        existing="$(readlink -f -- "$target" 2>/dev/null || true)"
-        desired="$(readlink -f -- "$source" 2>/dev/null || true)"
-        if [ -n "$desired" ] && [ "$existing" = "$desired" ]; then
+        existing_link="$(readlink -- "$target" 2>/dev/null || true)"
+        if [ -n "$existing_link" ] && [ "$existing_link" = "$source" ]; then
             return
         fi
     fi
