@@ -1,0 +1,5 @@
+interface:
+  display_name: "Prompt Search"
+  short_description: "Search local coding-agent prompt history"
+policy:
+  allow_implicit_invocation: false

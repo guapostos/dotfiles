@@ -1,0 +1,203 @@
+* Dotfiles
+
+Managed with [[https://www.gnu.org/software/stow/][GNU Stow]]. Each directory is a stow package that gets symlinked to ~$HOME~.
+
+** Quick Start
+
+#+begin_src sh
+# Clone
+git clone git@github.com:eihli/dotfiles.git ~/src/dotfiles
+cd ~/src/dotfiles
+
+# Install (auto-detects port/pacman/apt/brew)
+./install.sh
+
+# Or manually stow individual packages
+stow -t ~ alacritty fish tmux zellij starship git bash localbin nix claude agents
+
+# Optional: private overlays (personal configs not kept in the public repo)
+# Clone your private dotfiles repo alongside this one:
+#   git clone <private-repo> ~/src/dotfiles-private
+# Then add symlinks for any private packages you want to stow:
+#   ln -sfn ../dotfiles-private/claude-private ~/src/dotfiles/claude-private
+#   ln -sfn ../dotfiles-private/git-private ~/src/dotfiles/git-private
+#   ln -sfn ../dotfiles-private/opencode-private ~/src/dotfiles/opencode-private
+# Then re-run install.sh — it auto-detects and stows private overlays.
+#+end_src
+
+** Required Tools
+
+- *fish* - Primary shell
+- *starship* - Cross-shell prompt
+- *fzf* - Fuzzy finder (Ctrl-R, Ctrl-T)
+- *fd* - Fast find (used by fzf)
+- *mise* - Version manager (replaces pyenv/nvm)
+- *delta* - Git pager (diff highlighting)
+- *zellij* - Terminal multiplexer (default)
+- *tmux* - Terminal multiplexer (fallback, prefix: ~C-]~)
+
+*** macOS (MacPorts)
+
+#+begin_src sh
+sudo port install fish starship fzf fd mise git-delta zellij tmux
+#+end_src
+
+*** Arch Linux (pacman)
+
+#+begin_src sh
+sudo pacman -S --needed stow fish starship git-delta mise fzf fd \
+    zoxide bat tmux git-lfs jq usage zellij
+#+end_src
+
+*** Ubuntu/Debian
+
+#+begin_src sh
+# apt packages
+sudo apt install -y fish fzf tmux
+
+# fd (package name differs)
+sudo apt install -y fd-find
+ln -s $(which fdfind) ~/.local/bin/fd  # alias to 'fd'
+
+# starship
+curl -sS https://starship.rs/install.sh | sh
+
+# mise
+curl https://mise.run | sh
+
+# delta (from GitHub releases)
+DELTA_VERSION=0.18.2
+curl -sLO "https://github.com/dandavison/delta/releases/download/${DELTA_VERSION}/git-delta_${DELTA_VERSION}_amd64.deb"
+sudo dpkg -i "git-delta_${DELTA_VERSION}_amd64.deb"
+rm "git-delta_${DELTA_VERSION}_amd64.deb"
+
+# zellij (from GitHub releases)
+ZELLIJ_VERSION=0.41.2
+curl -sLO "https://github.com/zellij-org/zellij/releases/download/v${ZELLIJ_VERSION}/zellij-x86_64-unknown-linux-musl.tar.gz"
+tar xzf zellij-x86_64-unknown-linux-musl.tar.gz
+sudo mv zellij /usr/local/bin/
+rm zellij-x86_64-unknown-linux-musl.tar.gz
+#+end_src
+
+** Stow Packages
+
+| Package   | Contents                              |
+|-----------+---------------------------------------|
+| alacritty | ~.config/alacritty/alacritty.toml~    |
+| agents    | ~.config/AGENTS.md~, shared ~.agents/skills/~ |
+| bash      | ~.bashrc~, ~.zshrc~ (fallback shells) |
+| claude    | ~.claude/~ (agents, skills)           |
+| fish      | ~.config/fish/config.fish~            |
+| git       | ~.gitconfig~                          |
+| localbin  | ~.local/bin/~ helper scripts         |
+| starship  | ~.config/starship.toml~               |
+| tmux      | ~.tmux.conf~, ~.tmux/~                |
+| zellij    | ~.config/zellij/config.kdl~           |
+
+** Skills
+
+Shared cross-agent skills live under ~/.agents/skills/~ and are linked into Claude Code, Codex, and OpenCode by the installer. Claude-only skills still live under ~/.claude/skills/~.
+
+Claude-specific skills:
+
+| Skill          | Trigger              | Purpose                                      |
+|----------------+----------------------+----------------------------------------------|
+| /next          | "what's next?"       | Resume work: check state, run gates, suggest tasks |
+| /finalize      | "wrap up", "done?"   | Pre-commit checklist: gates, review, commit  |
+| /long-session  | "overnight", "autonomous" | Prep for unattended agent loops (TDD-first) |
+| /session-notes | "signing off", "what did we do?" | Auto-generate session summary + signoff notes |
+| /title         | "set title"          | Set terminal title (2-word summary)          |
+| /clear-title   | "reset title"        | Clear manual title, use auto-summary         |
+| /north-star    | "new project"        | Create immutable design contract (NORTH_STAR.md) |
+| /skill-creator | -                    | Guide for creating new skills                |
+| /mcp-builder   | -                    | Guide for building MCP servers               |
+
+** Cross-Platform Design
+
+*IMPORTANT*: Configs must work on both macOS and Linux without hardcoded paths.
+
+- Shell configs bootstrap PATH to find tools (Homebrew, MacPorts, etc.)
+- Use ~command -v~ / ~type -q~ to check tool availability, not absolute paths
+- ~.zshrc~ sets up PATH then ~exec fish~ (handles Spotlight launch on macOS)
+- Fish is the primary shell; bash/zsh are fallbacks
+- Machine-local shell settings live outside this repo:
+  - ~~/.config/shell/local.sh~~ is sourced by bash and zsh if present
+  - ~~/.config/fish/local.fish~~ is sourced by fish if present
+
+** Machine-Specific Notes
+
+*** Gnome Keyring
+
+Get a keyring for credential storage:
+
+#+begin_src sh
+# May need xdg autostart modifications
+# https://wiki.archlinux.org/title/GNOME/Keyring#Start_SSH_and_Secrets_components_of_keyring_daemon
+
+# PAM config for auto-unlock
+# https://wiki.gnome.org/Projects/GnomeKeyring/Pam
+# Update /etc/pam.d/login
+
+# If secrets service not starting:
+systemctl --user add-wants autostart.target gnome-keyring-secrets.service
+#+end_src
+
+*** StumpWM (Common Lisp window manager)
+
+#+begin_src sh
+# Create ~/common-lisp directory
+# Requirements:
+#   - Set SBCL_HOME when building (avoids sb-cltl2 error)
+#   - cl-utilities, ppath, sly
+#   - clx-truetype: clone https://github.com/LispLima/clx-truetype to ~/quicklisp/local-projects
+
+# Add .desktop to /usr/share/xsessions/ for display manager
+#+end_src
+
+*** Keyboard (Norman layout + Caps→Esc)
+
+#+begin_src sh
+setxkbmap -variant norman -option lv3:ralt_alt
+xmodmap -e "keycode 66 = Escape Escape" -e "keycode 9 = Caps_Lock Caps_Lock"
+#+end_src
+
+*** HiDPI
+
+For Java Swing: use Java 9+ and set ~GDK_SCALE=2~.
+
+*** Nvidia Hybrid Graphics
+
+Don't trust ~nvidia-xconfig~ output. See [[https://wiki.archlinux.org/title/PRIME][Arch Wiki PRIME]].
+
+#+begin_example
+Section "Files"
+    ModulePath "/usr/lib/xorg/modules"
+    ModulePath "/usr/lib/nvidia/xorg"
+EndSection
+
+Section "Device"
+    Identifier "Intel UHD"
+    BusID "PCI:00:02:0"
+    Driver "modesetting"
+EndSection
+
+Section "Device"
+    Identifier "GeForce RTX 2080"
+    Driver "nvidia"
+    VendorName "NVIDIA Corporation"
+    BusID "PCI:01:00:0"
+EndSection
+#+end_example
+
+*** Arch Linux Base Packages
+
+Additional system packages beyond what ~install.sh~ handles:
+
+#+begin_src sh
+sudo pacman -S --needed git emacs ripgrep base-devel xclip cmake docker
+#+end_src
+
+*** Useful Apps
+
+- [[https://github.com/jceb/dex][dex]] - auto-start XDG .desktop entries
+- Fira fonts (~fc-list~, ~xset -q~ to verify)

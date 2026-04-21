@@ -19,14 +19,27 @@ export XDG_CACHE_HOME="$HOME/.cache"
 # === Environment ===
 export EDITOR=vim
 
+# Host-specific shell overrides (not tracked)
+[ -f "$HOME/.config/shell/local.sh" ] && . "$HOME/.config/shell/local.sh"
+
 # === Terminal colors ===
 # Enable true color support for modern terminals (Claude Code, bat, delta, etc.)
 if [[ -z "$COLORTERM" && "$TERM" =~ (256color|alacritty|kitty|tmux|screen) ]]; then
     export COLORTERM=truecolor
 fi
 
-# === PATH ===
-export PATH="$HOME/.local/bin:$HOME/bin:$HOME/.cargo/bin:$PATH"
+# === PATH (platform-aware) ===
+export PATH="$HOME/.local/bin:$HOME/bin:$PATH"
+case "$(uname)" in
+    Darwin)
+        # Homebrew (Apple Silicon then Intel) + MacPorts
+        [ -d /opt/homebrew/bin ] && export PATH="/opt/homebrew/bin:/opt/homebrew/sbin:$PATH"
+        [ -d /usr/local/bin ] && export PATH="/usr/local/bin:/usr/local/sbin:$PATH"
+        [ -d /opt/local/bin ] && export PATH="/opt/local/bin:/opt/local/sbin:$PATH"
+        ;;
+esac
+
+# Go binaries
 [ -d "$HOME/go/bin" ] && export PATH="$HOME/go/bin:$PATH"
 
 # === Git aliases ===
@@ -67,3 +80,6 @@ command -v zoxide &>/dev/null && eval "$(zoxide init bash)"
 
 # === bat (better cat) ===
 command -v bat &>/dev/null && alias cat='bat'
+export ANDROID_HOME="$HOME/Android/Sdk"
+export PATH="$PATH:$ANDROID_HOME/platform-tools:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/emulator"
+export PATH=$PATH:$HOME/.maestro/bin

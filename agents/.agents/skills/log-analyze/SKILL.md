@@ -1,8 +1,20 @@
+---
+name: log-analyze
+description: |
+  Analyze JSON-lines logs from a project's recent run: error/warning summaries,
+  timeline, metadata. Works with the XDG-state-dir `runs/{timestamp}_{sha}[_dirty]/`
+  layout plus `latest` symlink. Use when the user asks to investigate failing runs,
+  triage log noise, or summarize what happened in the most recent run.
+---
+
 # Log Analyze
 
 Analyze logs for: $ARGUMENTS
 
-Follows convention in `~/.claude/conventions/logging.md`.
+Assumes the project follows the standard logging convention: JSON-lines format,
+`runs/{timestamp}_{sha}[_dirty]/` directories in `$XDG_STATE_HOME/<project>/`, and
+a `latest` symlink. If a project-specific or user-specific logging convention doc
+is available, follow that for exact layout and field names.
 
 ## 1. Resolve Project
 

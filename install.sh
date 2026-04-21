@@ -5,7 +5,12 @@
 set -e
 cd "$(dirname "$0")"
 
-python3 scripts/render-agent-surfaces.py
+# Regenerate tool-specific AGENTS.md / CLAUDE.md surfaces from shared source.
+if [ -f scripts/render-agent-surfaces.py ]; then
+    python3 scripts/render-agent-surfaces.py
+fi
+
+# ---- helper functions ----
 
 link_shared_doc() {
     local target="$1"
@@ -105,10 +110,14 @@ link_compat_file() {
     echo "Skipping $legacy_target (legacy file differs from managed config)"
 }
 
-# Detect package manager
+# ---- package manager / dep install ----
+
 if command -v port &> /dev/null; then
     PM=port
     PM_INSTALL="sudo port install"
+elif command -v pacman &> /dev/null; then
+    PM=pacman
+    PM_INSTALL="sudo pacman -S --needed"
 elif command -v apt &> /dev/null; then
     PM=apt
     PM_INSTALL="sudo apt install -y"
@@ -116,45 +125,46 @@ elif command -v brew &> /dev/null; then
     PM=brew
     PM_INSTALL="brew install"
 else
-    echo "No supported package manager found (port, apt, brew)"
+    echo "No supported package manager found (port, pacman, apt, brew)"
     exit 1
 fi
 
 # Tools required by dotfiles configs
-# Format: "command:apt_pkg:port_pkg:brew_pkg"
+# Format: "command:apt_pkg:port_pkg:brew_pkg:pacman_pkg"
 # Use - to skip a package manager (tool not available there)
 # Use cmd1|cmd2 to check alternate binary names (e.g. Debian's fdfind/batcat)
 DEPS=(
-    "stow:stow:stow:stow"
-    "fish:fish:fish:fish"
-    "starship:-:starship:starship"
-    "delta:-:git-delta:git-delta"
-    "mise:-:mise:mise"
-    "fzf:fzf:fzf:fzf"
-    "fd|fdfind:fd-find:fd:fd"
-    "zoxide:zoxide:zoxide:zoxide"
-    "bat|batcat:bat:bat:bat"
-    "tmux:tmux:tmux:tmux"
-    "git-lfs:git-lfs:git-lfs:git-lfs"
-    "jq:jq:jq:jq"
+    "stow:stow:stow:stow:stow"
+    "fish:fish:fish:fish:fish"
+    "starship:-:starship:starship:starship"
+    "delta:-:git-delta:git-delta:git-delta"
+    "mise:-:mise:mise:mise"
+    "fzf:fzf:fzf:fzf:fzf"
+    "fd|fdfind:fd-find:fd:fd:fd"
+    "zoxide:zoxide:zoxide:zoxide:zoxide"
+    "bat|batcat:bat:bat:bat:bat"
+    "tmux:tmux:tmux:tmux:tmux"
+    "git-lfs:git-lfs:git-lfs:git-lfs:git-lfs"
+    "jq:jq:jq:jq:jq"
+    "terminal-notifier:-:terminal-notifier:terminal-notifier:-"
+    "usage:-:-:usage:usage"
 )
 
-# Check which tools are missing
 missing=()
 missing_pkgs=()
 manual=()
 for dep in "${DEPS[@]}"; do
-    IFS=: read -r cmd apt_pkg port_pkg brew_pkg <<< "$dep"
-    # Check all alternate names (pipe-separated)
+    IFS=: read -r cmd apt_pkg port_pkg brew_pkg pacman_pkg <<< "$dep"
     found=false
     for alt in ${cmd//|/ }; do
         if command -v "$alt" &> /dev/null; then found=true; break; fi
     done
     if ! $found; then
         case $PM in
-            apt)  pkg=$apt_pkg ;;
-            port) pkg=$port_pkg ;;
-            brew) pkg=$brew_pkg ;;
+            apt)    pkg=$apt_pkg ;;
+            port)   pkg=$port_pkg ;;
+            brew)   pkg=$brew_pkg ;;
+            pacman) pkg=$pacman_pkg ;;
         esac
         if [ "$pkg" != "-" ]; then
             missing+=("${cmd%%|*}")
@@ -165,7 +175,6 @@ for dep in "${DEPS[@]}"; do
     fi
 done
 
-# Install missing tools with confirmation
 if [ ${#missing[@]} -gt 0 ]; then
     echo "=== Missing tools ==="
     echo ""
@@ -187,7 +196,6 @@ else
     echo "All tool dependencies satisfied."
 fi
 
-# Print manual install instructions for tools not in package manager
 if [ ${#manual[@]} -gt 0 ]; then
     echo ""
     echo "=== Manual installs needed ==="
@@ -205,10 +213,87 @@ if [ ${#manual[@]} -gt 0 ]; then
     echo ""
 fi
 
-# Clear refolded skill leaves before re-stowing `agents`. The post-stow
-# refold step below replaces stow's per-file symlinks with directory
-# symlinks, which stow then treats as foreign on a subsequent run. Removing
-# them lets stow re-stow cleanly.
+# ---- shared-skill discovery (for stow --ignore filtering) ----
+
+shared_skill_names=()
+shared_skill_ignore_args=()
+
+has_shared_skill() {
+    local candidate="$1"
+    local name
+    for name in "${shared_skill_names[@]}"; do
+        [ "$name" = "$candidate" ] && return 0
+    done
+    return 1
+}
+
+collect_shared_skills() {
+    local root src name
+    for root in "$@"; do
+        [ -d "$root" ] || continue
+        for src in "$root"/*; do
+            [ -e "$src" ] || continue
+            [ -d "$src" ] || [ -L "$src" ] || continue
+            name="$(basename "$src")"
+            if ! has_shared_skill "$name"; then
+                shared_skill_names+=("$name")
+            fi
+        done
+    done
+}
+
+regex_escape() {
+    printf '%s' "$1" | sed -e 's/[][(){}.^$+*?|\\]/\\&/g'
+}
+
+build_shared_skill_ignore_args() {
+    local pkg="$1"
+    local pkg_source skill_root entry name escaped_root
+    local shared_names=()
+    local entries=()
+
+    shared_skill_ignore_args=()
+    pkg_source="$(readlink -f -- "$pkg" 2>/dev/null || true)"
+    if [ -z "$pkg_source" ] || [ ! -d "$pkg_source" ]; then
+        return
+    fi
+
+    for skill_root in ".claude/skills" ".codex/skills" ".config/opencode/skills"; do
+        [ -d "$pkg_source/$skill_root" ] || continue
+
+        entries=()
+        shared_names=()
+        while IFS= read -r -d '' entry; do
+            entries+=("$entry")
+            name="$(basename "$entry")"
+            if { [ -d "$entry" ] || [ -L "$entry" ]; } && has_shared_skill "$name"; then
+                shared_names+=("$name")
+            fi
+        done < <(find "$pkg_source/$skill_root" -mindepth 1 -maxdepth 1 -print0 2>/dev/null)
+
+        [ ${#shared_names[@]} -gt 0 ] || continue
+
+        escaped_root="$(regex_escape "$skill_root")"
+        if [ ${#shared_names[@]} -eq ${#entries[@]} ]; then
+            shared_skill_ignore_args+=("--ignore=$escaped_root")
+            continue
+        fi
+
+        for name in "${shared_names[@]}"; do
+            shared_skill_ignore_args+=("--ignore=$escaped_root/$(regex_escape "$name")")
+        done
+    done
+}
+
+shared_skill_roots=("$(pwd)/agents/.agents/skills" "$(pwd)/agents-private/.agents/skills")
+collect_shared_skills "${shared_skill_roots[@]}"
+
+# ---- stow public packages ----
+
+# Clear refolded skill leaves before re-stowing `agents`. The post-stow refold
+# step below replaces stow's per-file symlinks with directory symlinks, which
+# stow then treats as foreign on a subsequent run. Removing them lets stow
+# re-stow cleanly.
 if [ -d "$HOME/.agents/skills" ]; then
     for leaf in "$HOME/.agents/skills"/*; do
         [ -L "$leaf" ] || continue
@@ -219,10 +304,15 @@ if [ -d "$HOME/.agents/skills" ]; then
     done
 fi
 
-# Stow all packages
-for pkg in age agents bash fish git nix opencode claude plugins starship tmux zellij; do
-    echo "Stowing $pkg..."
-    stow --no-folding -t ~ "$pkg"
+for pkg in age agents alacritty bash claude desktop fish git localbin nix opencode plugins starship tmux zellij; do
+    [ -d "$pkg" ] || continue
+    build_shared_skill_ignore_args "$pkg"
+    if [ ${#shared_skill_ignore_args[@]} -gt 0 ]; then
+        echo "Stowing $pkg (shared skills filtered)..."
+    else
+        echo "Stowing $pkg..."
+    fi
+    stow --no-folding "${shared_skill_ignore_args[@]}" -t ~ "$pkg"
 
     if [ "$pkg" = "opencode" ]; then
         OPENCODE_CONFIG="$HOME/.config/opencode/opencode.json"
@@ -234,42 +324,54 @@ for pkg in age agents bash fish git nix opencode claude plugins starship tmux ze
     fi
 done
 
-# Private overlay (domain-specific skills, CLIs, and configs) has its own
-# install.sh in ~/src/dotfiles-private. It stows as a peer — run it after
-# this one if you want the private packages installed.
-
-# Link shared AGENTS.md into tools that natively read AGENTS.md
-SHARED_AGENTS="$HOME/.config/AGENTS.md"
-if [ -f "$SHARED_AGENTS" ]; then
-    link_shared_doc "$HOME/.codex/AGENTS.md" "$SHARED_AGENTS"
-    link_shared_doc "$HOME/.config/opencode/AGENTS.md" "$SHARED_AGENTS"
-
-    # Claude Code still needs CLAUDE.md. Fall back to shared AGENTS.md only if
-    # no Claude-specific global file exists yet.
-    if [ ! -e "$HOME/.claude/CLAUDE.md" ]; then
-        mkdir -p "$HOME/.claude"
-        ln -sfn "$SHARED_AGENTS" "$HOME/.claude/CLAUDE.md"
-        echo "Linked $HOME/.claude/CLAUDE.md -> $SHARED_AGENTS"
+# ---- stow private overlays ----
+# Symlink shims in this repo point at ../dotfiles-private/* so stow sees all
+# overlapping packages from a single stow dir. Lets shared targets like
+# ~/.claude/ and ~/.agents/ get split safely between public and private.
+private_overlays=(agents-private claude-private gemini-private git-private opencode-private)
+stowed_private=false
+for overlay in "${private_overlays[@]}"; do
+    if [ -L "$overlay" ] && [ -d "$overlay" ]; then
+        build_shared_skill_ignore_args "$overlay"
+        if [ ${#shared_skill_ignore_args[@]} -gt 0 ]; then
+            echo "Stowing $overlay (shared skills filtered)..."
+        else
+            echo "Stowing $overlay..."
+        fi
+        stow --no-folding "${shared_skill_ignore_args[@]}" -t ~ "$overlay"
+        stowed_private=true
     fi
+done
+
+if ! $stowed_private; then
+    echo "No private overlays found (optional). To add:"
+    echo "  git clone <private-repo> ~/src/dotfiles-private"
+    for overlay in "${private_overlays[@]}"; do
+        echo "  ln -sfn ../dotfiles-private/$overlay ~/src/dotfiles/$overlay"
+    done
 fi
+
+# ---- shared skills: refold + fan out to each tool ----
 
 SHARED_SKILLS_ROOT="$HOME/.agents/skills"
 
 # Refold public-repo skills at the leaf level. We stow `agents` with
 # --no-folding to keep ~/.agents/ itself a real directory (so stray writes
-# don't leak into the repo — see ab70eca). But that leaves each
-# ~/.agents/skills/<name>/ as a real dir with symlinked leaves, which means
-# SKILL.md ends up a symlink. Codex's skill loader (rust-v0.80.0 / PR #8801)
-# is supposed to follow symlinked SKILL.md files, but in practice skills
-# discovered that way don't show up in `/skills`. Collapsing each skill
-# subdir into a single directory symlink gives every consumer (Codex,
-# Claude Code, OpenCode) a real SKILL.md at the far end of the chain.
+# don't leak into the repo). But that leaves each ~/.agents/skills/<name>/ as
+# a real dir with symlinked leaves, which means SKILL.md ends up a symlink.
+# Codex's skill loader is supposed to follow symlinked SKILL.md files, but in
+# practice skills discovered that way don't show up in `/skills`. Collapsing
+# each skill subdir into a single directory symlink gives every consumer
+# (Codex, Claude Code, OpenCode) a real SKILL.md at the far end of the chain.
 #
 # Safe because LLM tooling treats skill dirs as read-only; nothing writes
 # cache/state next to SKILL.md.
-PUBLIC_SKILLS_SRC="$(pwd)/agents/.agents/skills"
-if [ -d "$PUBLIC_SKILLS_SRC" ] && [ -d "$SHARED_SKILLS_ROOT" ]; then
-    for src in "$PUBLIC_SKILLS_SRC"/*/; do
+refold_public_skills() {
+    local source_root="$1"
+    [ -d "$source_root" ] || return
+    [ -d "$SHARED_SKILLS_ROOT" ] || return
+
+    for src in "$source_root"/*/; do
         [ -d "$src" ] || continue
         name="$(basename "$src")"
         leaf="$SHARED_SKILLS_ROOT/$name"
@@ -287,7 +389,10 @@ if [ -d "$PUBLIC_SKILLS_SRC" ] && [ -d "$SHARED_SKILLS_ROOT" ]; then
         ln -sfn "$src_canon" "$leaf"
         echo "Refolded $leaf -> $src_canon"
     done
-fi
+}
+
+refold_public_skills "$(pwd)/agents/.agents/skills"
+refold_public_skills "$(pwd)/agents-private/.agents/skills"
 
 if [ -d "$SHARED_SKILLS_ROOT" ]; then
     for skill_dir in "$SHARED_SKILLS_ROOT"/*; do
@@ -299,4 +404,50 @@ if [ -d "$SHARED_SKILLS_ROOT" ]; then
     done
 fi
 
+# ---- shared AGENTS.md surfaces ----
+
+SHARED_AGENTS="$HOME/.config/AGENTS.md"
+if [ -f "$SHARED_AGENTS" ]; then
+    link_shared_doc "$HOME/.codex/AGENTS.md" "$SHARED_AGENTS"
+    link_shared_doc "$HOME/.config/opencode/AGENTS.md" "$SHARED_AGENTS"
+
+    # Claude Code still needs CLAUDE.md. Fall back to shared AGENTS.md only if
+    # no Claude-specific global file exists yet.
+    if [ ! -e "$HOME/.claude/CLAUDE.md" ]; then
+        mkdir -p "$HOME/.claude"
+        ln -sfn "$SHARED_AGENTS" "$HOME/.claude/CLAUDE.md"
+        echo "Linked $HOME/.claude/CLAUDE.md -> $SHARED_AGENTS"
+    fi
+fi
+
+# ---- lisa plugin registration ----
+
+PLUGINS_FILE=~/.claude/plugins/installed_plugins.json
+if [ -f "$PLUGINS_FILE" ]; then
+    if ! grep -q '"lisa@local"' "$PLUGINS_FILE"; then
+        echo "Registering lisa plugin..."
+        jq '.plugins["lisa@local"] = [{
+            "scope": "user",
+            "installPath": "'"$HOME"'/.claude/plugins/cache/local/lisa/1.0.0",
+            "version": "1.0.0",
+            "installedAt": "'"$(date -u +%Y-%m-%dT%H:%M:%SZ)"'",
+            "lastUpdated": "'"$(date -u +%Y-%m-%dT%H:%M:%SZ)"'"
+        }]' "$PLUGINS_FILE" > "$PLUGINS_FILE.tmp" && mv "$PLUGINS_FILE.tmp" "$PLUGINS_FILE"
+        echo "Lisa plugin registered"
+    fi
+else
+    echo "Warning: $PLUGINS_FILE not found. Run 'claude' once first to initialize."
+fi
+
 echo "Done! Symlinks created."
+echo ""
+echo "=== Manual steps ==="
+echo ""
+echo "# Claude cross-user notifications (if running claude as another user):"
+echo "sudo cp root/etc/tmpfiles.d/claude-notify.conf /etc/tmpfiles.d/"
+echo "sudo systemd-tmpfiles --create  # creates /run/claude-notify now"
+echo "systemctl --user daemon-reload"
+echo "systemctl --user enable --now claude-notify"
+echo ""
+echo "# Verify service running:"
+echo "systemctl --user status claude-notify"

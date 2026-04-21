@@ -25,6 +25,16 @@ abbr gf "git fetch"
 abbr gca "git commit --amend"
 abbr gcam "git commit -am"
 
+# === Cross-platform clipboard ===
+switch (uname)
+    case Darwin
+        abbr xcp "pbcopy"
+        abbr xpaste "pbpaste"
+    case '*'
+        abbr xcp "xclip -selection clipboard"
+        abbr xpaste "xclip -selection clipboard -o"
+end
+
 # === Environment ===
 set -gx XDG_STATE_HOME $HOME/.local/state
 set -gx XDG_CONFIG_HOME $HOME/.config
@@ -32,6 +42,11 @@ set -gx XDG_DATA_HOME $HOME/.local/share
 set -gx XDG_CACHE_HOME $HOME/.cache
 set -gx VIRTUALENV_DIR $XDG_STATE_HOME/virtualenvs
 set -gx EDITOR vim
+
+# Host-specific shell overrides (not tracked)
+if test -f "$HOME/.config/fish/local.fish"
+    source "$HOME/.config/fish/local.fish"
+end
 
 # === Terminal colors ===
 # Enable true color support for modern terminals (Claude Code, bat, delta, etc.)
@@ -42,8 +57,18 @@ end
 # === PATH (fish_add_path only adds if dir exists) ===
 fish_add_path $HOME/.local/bin
 fish_add_path $HOME/bin
-fish_add_path $HOME/.cargo/bin
+if test -f $HOME/.cargo/env.fish
+    source $HOME/.cargo/env.fish
+else
+    fish_add_path $HOME/.cargo/bin
+end
 fish_add_path $HOME/go/bin
+# Emacs (self-compiled)
+fish_add_path $HOME/src/emacs/nextstep/Emacs.app/Contents/MacOS
+# macOS: Homebrew (Apple Silicon, Intel) + MacPorts
+fish_add_path /opt/homebrew/bin /opt/homebrew/sbin
+fish_add_path /usr/local/bin /usr/local/sbin
+fish_add_path /opt/local/bin /opt/local/sbin
 
 # === mise (replaces pyenv/nvm/rbenv) ===
 if type -q mise
@@ -125,3 +150,6 @@ end
 
 # opencode
 fish_add_path $HOME/.opencode/bin
+
+# Antigravity
+test -d ~/.antigravity/antigravity/bin; and fish_add_path ~/.antigravity/antigravity/bin

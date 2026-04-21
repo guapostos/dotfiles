@@ -99,3 +99,10 @@ Append:
 ## 8. Confirm
 
 Show the summary and state which file was updated.
+
+## Key Principles
+
+- **Read, don't recall.** Use git history and file diffs, not memory.
+- **Group by theme.** "3 commits fixing order state machine" not 3 separate bullets.
+- **Be specific.** File names, function names, test counts — not vague summaries.
+- **Uncommitted work is important.** Flag it prominently so it's not forgotten.

@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+tmp="$(mktemp)"
+trap 'rm -f "$tmp"' EXIT
+cat > "$tmp"
+
+# Chain into per-repo hook if it exists.
+GIT_DIR="$(git rev-parse --git-dir 2>/dev/null)"
+if [ -n "$GIT_DIR" ] && [ -x "$GIT_DIR/hooks/pre-push" ]; then
+    "$GIT_DIR/hooks/pre-push" "$@" <"$tmp" || exit $?
+fi
+
+# Push LFS objects when git-lfs is available.
+command -v git-lfs >/dev/null 2>&1 && git lfs pre-push "$@" <"$tmp"

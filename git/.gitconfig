@@ -54,7 +54,7 @@
 	wip = !git add -A && git commit -m 'WIP'
 	undo = reset --soft HEAD~1
 	# Show what I did today
-	today = log --since=midnight --author='Eric Ihli' --oneline
+	today = !git log --since=midnight --author=\"$(git config user.name)\" --oneline
 	ss = status
 	fixup = commit --fixup
 	ri = rebase -i
