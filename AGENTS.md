@@ -32,7 +32,7 @@ stow -D -t ~ <package>
 
 This repo holds tool configuration and domain-neutral AI infrastructure — shells, terminal, git, nix, general workflow skills (checkpoint, next, research, session-notes, skill-creator, multi-mind) and generic engineering agents (debug, reviewer-*, code-simplifier, verify-app, logalyzer).
 
-Work/domain-specific material (finance/markets tooling, project-specific skills, secrets) lives in a peer repo at `~/src/dotfiles-private` with its own `install.sh`. Run both installers if you want the full environment.
+Work/domain-specific material (private project-specific skills, local overlays, secrets) lives in a peer repo at `~/src/dotfiles-private` with its own `install.sh`. Run both installers if you want the full environment.
 
 ## AI Config
 

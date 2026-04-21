@@ -1,7 +1,7 @@
 {
-  "name": "raider-local",
+  "name": "dotfiles-local",
   "interface": {
-    "displayName": "Raider Local"
+    "displayName": "Dotfiles Local"
   },
   "plugins": [
     {

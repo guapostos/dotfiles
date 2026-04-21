@@ -3,11 +3,11 @@
   "version": "1.0.0",
   "description": "Shared specialist agents from this dotfiles setup.",
   "author": {
-    "name": "raider",
-    "url": "https://github.com/guapostos"
+    "name": "Eric Ihli",
+    "url": "https://github.com/eihli"
   },
-  "homepage": "https://github.com/guapostos/dotfiles",
-  "repository": "https://github.com/guapostos/dotfiles",
+  "homepage": "https://github.com/eihli/dotfiles",
+  "repository": "https://github.com/eihli/dotfiles",
   "license": "MIT",
   "keywords": [
     "agents",
@@ -20,16 +20,16 @@
     "displayName": "Dotfiles Agents",
     "shortDescription": "Specialist debug, review, verification, and simplification agents",
     "longDescription": "A local Codex plugin that exposes the specialist agents managed in this dotfiles repo, including debugging, code review, log analysis, verification, and simplification prompts.",
-    "developerName": "raider",
+    "developerName": "Eric Ihli",
     "category": "Coding",
     "capabilities": [
       "Interactive",
       "Read",
       "Write"
     ],
-    "websiteURL": "https://github.com/guapostos/dotfiles",
-    "privacyPolicyURL": "https://github.com/guapostos/dotfiles",
-    "termsOfServiceURL": "https://github.com/guapostos/dotfiles",
+    "websiteURL": "https://github.com/eihli/dotfiles",
+    "privacyPolicyURL": "https://github.com/eihli/dotfiles",
+    "termsOfServiceURL": "https://github.com/eihli/dotfiles",
     "defaultPrompt": [
       "Use the debug agent to root-cause this issue",
       "Use the adversarial reviewer on my changes",

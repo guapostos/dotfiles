@@ -9,7 +9,7 @@ Stream the image currently in your local clipboard to a file over SSH.
 Run this on the machine that owns the clipboard, not inside the remote shell.
 
 Examples:
-  scb raider /tmp/chart.png
+  scb server /tmp/chart.png
   scb user@example.com ~/incoming/screenshot.png
 
 Backends:
