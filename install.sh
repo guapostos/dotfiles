@@ -290,19 +290,31 @@ collect_shared_skills "${shared_skill_roots[@]}"
 
 # ---- stow public packages ----
 
-# Clear refolded skill leaves before re-stowing `agents`. The post-stow refold
-# step below replaces stow's per-file symlinks with directory symlinks, which
-# stow then treats as foreign on a subsequent run. Removing them lets stow
-# re-stow cleanly.
-if [ -d "$HOME/.agents/skills" ]; then
-    for leaf in "$HOME/.agents/skills"/*; do
-        [ -L "$leaf" ] || continue
-        target="$(readlink -f -- "$leaf" 2>/dev/null || true)"
-        case "$target" in
-            "$(pwd)"/agents/.agents/skills/*) rm -f "$leaf" ;;
-        esac
+# Clear refolded skill leaves before re-stowing shared skill packages. The
+# post-stow refold step below replaces stow's per-file symlinks with direct
+# directory symlinks, which stow treats as foreign on a subsequent run.
+# Removing those leaves first keeps both public and private skill overlays
+# idempotent.
+clear_refolded_skill_leaves() {
+    local source_root leaf target
+
+    [ -d "$HOME/.agents/skills" ] || return
+
+    for source_root in "$@"; do
+        source_root="$(readlink -f -- "$source_root" 2>/dev/null || true)"
+        [ -n "$source_root" ] || continue
+
+        for leaf in "$HOME/.agents/skills"/*; do
+            [ -L "$leaf" ] || continue
+            target="$(readlink -f -- "$leaf" 2>/dev/null || true)"
+            case "$target" in
+                "$source_root"/*) rm -f "$leaf" ;;
+            esac
+        done
     done
-fi
+}
+
+clear_refolded_skill_leaves "${shared_skill_roots[@]}"
 
 for pkg in age agents alacritty bash claude desktop fish git localbin nix opencode plugins starship tmux zellij; do
     [ -d "$pkg" ] || continue
