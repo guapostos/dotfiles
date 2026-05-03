@@ -78,6 +78,9 @@ export FZF_DEFAULT_OPTS='--height 40% --layout=reverse --border'
 # === zoxide (smart cd) ===
 command -v zoxide &>/dev/null && eval "$(zoxide init bash)"
 
+# === direnv (auto-load .envrc; pairs with `secrets export ...`) ===
+command -v direnv &>/dev/null && eval "$(direnv hook bash)"
+
 # === bat (better cat) ===
 command -v bat &>/dev/null && alias cat='bat'
 export ANDROID_HOME="$HOME/Android/Sdk"

@@ -21,4 +21,9 @@ fi
 if command -v starship &>/dev/null; then
     eval "$(starship init zsh)"
 fi
+
+# direnv (auto-load .envrc; pairs with `secrets export ...`)
+if command -v direnv &>/dev/null; then
+    eval "$(direnv hook zsh)"
+fi
 export PATH=$PATH:$HOME/.maestro/bin

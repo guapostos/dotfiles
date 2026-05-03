@@ -97,6 +97,11 @@ if type -q zoxide
     zoxide init fish | source
 end
 
+# === direnv (auto-load .envrc; pairs with `secrets export ...`) ===
+if type -q direnv
+    direnv hook fish | source
+end
+
 # === bat (better cat) ===
 if type -q bat
     abbr cat "bat"
